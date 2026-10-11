@@ -161,6 +161,7 @@ em { font-style: normal; color: var(--accent-2); }
 }
 .icon-btn:hover { border-color: var(--border-strong); }
 .theme-toggle { position: absolute; top: 24px; right: 28px; z-index: 5; }
+.sound-toggle { position: absolute; top: 24px; right: 76px; z-index: 5; }
 
 /* ---------- Buttons & inputs ---------- */
 .btn {
@@ -621,7 +622,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .sidebar.open { transform: none; }
   .sidebar .brand { display: none; }
   .content { padding: 20px 16px 40px; }
-  .theme-toggle { position: static; float: right; margin: 0 0 12px 12px; }
+  .theme-toggle, .sound-toggle { position: static; float: right; margin: 0 0 12px 12px; }
   .stepper { clear: both; padding: 0; margin-bottom: 20px; }
   .stepper li { flex-direction: column; gap: 6px; font-size: 0.72rem; position: relative; }
   .stepper li:not(:last-child)::after { position: absolute; top: 15px; left: calc(50% + 22px); right: calc(-50% + 22px); margin: 0; }

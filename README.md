@@ -32,6 +32,14 @@ The same promise is shown at the very top of the Home screen and on the password
 5. *(Optional)* **Rate the result** ("Too low" / "Accurate" / "Too high"). This feedback is stored
    with the record and can be used to tune the scoring.
 
+**Sound.** Background music loops once you first click or press a key on the page
+(browsers block audio before any interaction). Buttons, links, radio buttons and checkboxes
+play a click sound, and a **Strong** or **Very Strong** result (score 60 or more) plays
+applause. The speaker button next to the theme toggle mutes all sounds; the choice is
+remembered in the browser (`localStorage`). Music pauses while the tab is hidden.
+The sounds were generated with [ElevenLabs](https://elevenlabs.io) and live in
+[`static/audio/`](static/audio/).
+
 ```
 Browser ──POST /api/assess {password, answers}──▶ FastAPI
                                                    ├─ Have I Been Pwned: first 5 chars of SHA-1 only
@@ -408,6 +416,7 @@ own preview URL. After changing environment variables, redeploy for them to take
 │   ├── ratelimit.py     # In-memory rate limiting
 │   └── advisor.py       # Optional Gemma advice
 ├── static/              # Frontend (index.html, app.js, style.css)
+│   ├── audio/           # Background music, click and applause sounds (ElevenLabs)
 │   └── wordlists/       # EFF word list for the passphrase generator
 ├── tests/               # pytest tests
 ├── CLAUDE.md            # Working rules for Claude Code (README-first workflow)
@@ -424,7 +433,8 @@ uv run pytest
 ```
 
 The tests cover pattern detection, scoring, improvement suggestions, the breach check,
-the API, and a check that the raw password never appears in the database.
+the API (including that the sound files are served), and a check that the raw password
+never appears in the database.
 They make no network calls: the breach check is mocked or disabled with `BREACH_CHECK=false`.
 
 ## Changing questions or penalties

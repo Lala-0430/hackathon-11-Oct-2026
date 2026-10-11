@@ -85,6 +85,61 @@ $("theme-toggle").addEventListener("click", () => {
 
 try { applyTheme(localStorage.getItem("theme") || "dark"); } catch { applyTheme("dark"); }
 
+/* ---------- Sound ---------- */
+
+// Labels that count as a safe password and earn applause.
+const SAFE_LABELS = ["Strong", "Very Strong"];
+
+const music = $("bg-music");
+music.volume = 0.25;
+const clickSound = new Audio("/static/audio/click.mp3");
+clickSound.volume = 0.5;
+const clapSound = new Audio("/static/audio/clapping.mp3");
+clapSound.volume = 0.8;
+
+let soundOn = true;
+let interacted = false; // browsers block audio until the first click or key press
+try { soundOn = localStorage.getItem("sound") !== "off"; } catch { /* storage unavailable */ }
+
+function playEffect(audio) {
+  if (!soundOn) return;
+  audio.currentTime = 0;
+  audio.play().catch(() => {});
+}
+
+function updateMusic() {
+  if (soundOn && interacted && !document.hidden) music.play().catch(() => {});
+  else music.pause();
+}
+
+function applySound(on) {
+  soundOn = on;
+  $("sound-toggle").querySelector("use").setAttribute("href", on ? "#i-sound" : "#i-mute");
+  $("sound-toggle").setAttribute("aria-label", on ? "Mute sounds" : "Unmute sounds");
+  $("sound-toggle").setAttribute("aria-pressed", String(!on));
+  updateMusic();
+}
+
+$("sound-toggle").addEventListener("click", () => {
+  applySound(!soundOn);
+  try { localStorage.setItem("sound", soundOn ? "on" : "off"); } catch { /* storage unavailable */ }
+});
+
+for (const type of ["pointerdown", "keydown"]) {
+  document.addEventListener(type, () => {
+    if (interacted) return;
+    interacted = true;
+    updateMusic();
+  });
+}
+document.addEventListener("visibilitychange", updateMusic);
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("button, a, input[type=radio], input[type=checkbox]")) playEffect(clickSound);
+});
+
+applySound(soundOn);
+
 /* ---------- Step 1: password ---------- */
 
 function setPasswordVisible(show) {
@@ -240,6 +295,7 @@ function renderResult(r) {
   $("feedback-thanks").classList.add("hidden");
 
   showStep("step-result");
+  if (SAFE_LABELS.includes(r.label)) playEffect(clapSound);
 }
 
 function renderImprovements(r) {

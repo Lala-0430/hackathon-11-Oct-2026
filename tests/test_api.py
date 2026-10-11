@@ -77,6 +77,13 @@ def test_passphrase_wordlist_served(client):
     assert len(res.text.split()) == 7776
 
 
+@pytest.mark.parametrize("name", ["background", "click", "clapping"])
+def test_sound_served(client, name):
+    res = client.get(f"/static/audio/{name}.mp3")
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "audio/mpeg"
+
+
 def test_unknown_question_rejected(client):
     res = client.post("/api/assess", json={"password": "x", "answers": {"bogus": True}})
     assert res.status_code == 400
