@@ -139,8 +139,8 @@ All questions, automatic checks, penalties, and advice are defined in one place:
    "Found in a data breach" uses the [Have I Been Pwned](https://haveibeenpwned.com/Passwords)
    Pwned Passwords range API ([`app/breach.py`](app/breach.py)). Only the first 5 characters of
    the password's SHA-1 hash are sent, with response padding enabled; the match is done on the
-   server. If the API is unreachable (3-second timeout), the check is skipped and the
-   "data breach" question is scored as usual. When a breach is found, that question is skipped.
+   server. If the API is unreachable (3-second timeout), the check is skipped. Because breaches
+   are checked automatically, users are not asked about them.
 
 3. **Question penalties.** Each "yes" answer subtracts points:
 
@@ -151,13 +151,10 @@ All questions, automatic checks, penalties, and advice are defined in one place:
    | Based on a favourite team, band, hobby or brand                   | 10      |
    | A normal word with simple swaps (e.g. `a` → `@`, `o` → `0`)       | 15      |
    | Used on other websites, or shared with anyone else                | 20      |
-   | Appeared in a data breach                                         | 30*     |
-
-   \* Skipped when Have I Been Pwned already found the password (see `overlaps` in
-   `app/questions.py`), so the same weakness is not counted twice.
+   | An old password with a small change (e.g. a new number or `!` at the end) | 20 |
 
    Things the app can check from the password itself (common passwords, length,
-   digits/letters only, single case, sequences, keyboard patterns, repeats) are detected
+   digits/letters only, single case, sequences, keyboard patterns, repeats, data breaches) are detected
    automatically instead of being asked. Related questions are combined so there are
    only six to answer.
 
@@ -186,8 +183,7 @@ Fixes are applied one at a time, always choosing the one that helps most next, s
 score includes the steps before it. Unclamped scores are compared, so the steps are still
 ranked sensibly when the score is stuck at 0.
 
-When the password is a common password or was found in a breach (automatically or by the
-user's answer), no edits are suggested. The user is told to replace it instead.
+When the password is a common password or was found in a breach, no edits are suggested. The user is told to replace it instead.
 
 The **Password Generator** page creates random-character passwords or passphrases of 4–10
 words from the [EFF large word list](https://www.eff.org/dice)

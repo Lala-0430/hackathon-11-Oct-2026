@@ -64,12 +64,12 @@ QUESTIONS: list[Question] = [
         fix="Use it on this account only and keep it to yourself",
     ),
     Question(
-        id="breached",
-        text="Has this password ever appeared in a data breach, for example in a breach alert?",
-        penalty=30,
-        tip="A password that has leaked once is in attackers' lists and should never be used again.",
-        fix="Replace it with a password that has never leaked",
-        overlaps=("found_in_breach",),
+        id="old_password_variant",
+        text="Is it an old password with a small change, like a new number or ! at the end?",
+        penalty=20,
+        tip="If an old password ever leaks, attackers try small changes to it first, "
+            "such as a new number or symbol at the end.",
+        fix="Make a brand-new password instead of changing an old one",
     ),
 ]
 

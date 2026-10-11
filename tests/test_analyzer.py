@@ -78,14 +78,13 @@ def test_every_detectable_pattern_has_an_auto_check():
         assert set(q.overlaps) <= set(AUTO_CHECKS_BY_ID)
 
 
-def test_breach_count_adds_auto_check_and_skips_question():
+def test_breach_count_adds_auto_check():
     pw = "t7#Vq!x9Lm@2Rz$Kp4&"
-    breached = analyze(pw, {"breached": True}, breach_count=1234)
+    breached = analyze(pw, {}, breach_count=1234)
     assert "found_in_breach" in breached.features.patterns
     assert breached.features.breach_count == 1234
     assert breached.score == 0
     assert any("1,234 times" in issue for issue in breached.issues)
-    assert not any("You answered yes" in issue for issue in breached.issues)
 
 
 def test_breach_check_unknown_or_clean_changes_nothing():
@@ -93,7 +92,15 @@ def test_breach_check_unknown_or_clean_changes_nothing():
     for count in (None, 0):
         result = analyze(pw, {}, breach_count=count)
         assert "found_in_breach" not in result.features.patterns
-    assert analyze(pw, {"breached": True}, breach_count=0).score == analyze(pw, {}).score - 30
+    assert analyze(pw, {}, breach_count=0).score == analyze(pw, {}).score
+
+
+def test_old_password_variant_suggests_a_new_password():
+    pw = "t7#Vq!x9Lm@2Rz$Kp4&"
+    result = analyze(pw, {"old_password_variant": True})
+    assert result.score == analyze(pw, {}).score - 20
+    assert [i.fix for i in result.improvements] == ["Make a brand-new password instead of changing an old one"]
+    assert not result.replace_recommended
 
 
 def test_improvements_are_cumulative_steps():
@@ -117,7 +124,6 @@ def test_improvements_rank_fixes_while_score_is_zero():
 
 def test_replace_recommended_instead_of_improvements():
     for pw, answers, count in [("password", {}, None),
-                               ("t7#Vq!x9Lm@2Rz$Kp4&", {"breached": True}, None),
                                ("t7#Vq!x9Lm@2Rz$Kp4&", {}, 5)]:
         result = analyze(pw, answers, breach_count=count)
         assert result.replace_recommended

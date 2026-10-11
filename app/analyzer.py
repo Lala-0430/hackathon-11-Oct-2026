@@ -16,7 +16,7 @@ from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS, QUESTIONS_BY_ID
 
 # Bump this whenever the scoring logic changes, so stored records can be
 # compared across versions.
-SCORING_VERSION = "2.0.0"
+SCORING_VERSION = "2.1.0"
 
 # Assumed attacker speed for an offline attack on a fast hash.
 GUESSES_PER_SECOND = 1e10
@@ -45,7 +45,6 @@ TARGET_LENGTH = 16
 
 # Weaknesses that editing can't fix: the password should be replaced instead.
 REPLACE_PATTERNS = {"common_password", "found_in_breach"}
-REPLACE_ANSWERS = {"breached"}
 
 # Patterns fixed by simply removing the offending part.
 REMOVABLE_PATTERNS = ["contains_common_word", "keyboard_pattern", "sequence",
@@ -339,7 +338,7 @@ def suggest_improvements(assessment: Assessment, answers: dict[str, bool]) -> No
     are compared, so fixes still rank sensibly while the score is stuck at 0.
     """
     f = assessment.features
-    if REPLACE_PATTERNS & set(f.patterns) or any(answers.get(q) for q in REPLACE_ANSWERS):
+    if REPLACE_PATTERNS & set(f.patterns):
         assessment.replace_recommended = True
         return
 
