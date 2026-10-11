@@ -21,7 +21,7 @@ so the scoring can be improved over time.
 ```
 Browser ──POST /api/assess {password, answers}──▶ FastAPI
                                                    ├─ analyzer: features + score (in memory)
-                                                   └─ SQLite: features, answers, score   ← no password
+                                                   └─ DB: features, answers, score   ← no password
 Browser ◀────────────── score, label, tips ────────┘
 ```
 
@@ -30,9 +30,10 @@ Browser ◀────────────── score, label, tips ──�
 | Layer    | Technology                                   |
 |----------|----------------------------------------------|
 | Backend  | Python 3.12, FastAPI, Uvicorn                |
-| Database | SQLite (Python standard library `sqlite3`)   |
+| Database | SQLite locally, PostgreSQL ([Neon](https://neon.tech)) in production |
 | Frontend | Plain HTML, CSS, and JavaScript (no build)   |
 | AI       | Gemma via the Gemini API (`google-genai`), optional |
+| Hosting  | [Render](https://render.com) (free plan)     |
 | Tooling  | [uv](https://docs.astral.sh/uv/), pytest     |
 
 ## Getting started
@@ -67,7 +68,9 @@ All settings are optional and read from the environment or `.env`.
 |------------------|-------------------------|----------------------------------------------|
 | `GEMINI_API_KEY` | *(unset)*               | Enables the "Get AI advice" button           |
 | `GEMMA_MODEL`    | `gemma-4-26b-a4b-it`    | Gemma model used for advice                  |
-| `DATABASE_PATH`  | `data/assessments.db`   | SQLite database file                         |
+| `DATABASE_URL`   | *(unset)*               | PostgreSQL connection string. When set, it is used instead of SQLite |
+| `DATABASE_PATH`  | `data/assessments.db`   | SQLite database file (used when `DATABASE_URL` is unset) |
+| `ADMIN_TOKEN`    | *(unset)*               | Token for `GET /api/stats`. Stats are disabled when unset |
 | `HOST`           | `127.0.0.1`             | Server host                                  |
 | `PORT`           | `8000`                  | Server port                                  |
 | `RELOAD`         | `false`                 | Auto-reload on code changes                  |
@@ -138,11 +141,12 @@ Increase it whenever the scoring changes, so old and new results can be compared
 
 ## Data collection and privacy
 
-**What is stored** (table `assessments` in SQLite):
+**What is stored** (table `assessments`, same schema in SQLite and PostgreSQL):
 
 | Column            | Description                                         |
 |-------------------|-----------------------------------------------------|
 | `id`, `created_at`, `scoring_version` | Record metadata                 |
+| `public_id`       | Random ID returned by the API (so records can't be enumerated) |
 | `length`          | Password length                                     |
 | `has_lower`, `has_upper`, `has_digit`, `has_symbol`, `has_other` | Character types used |
 | `pool_size`, `entropy_bits` | Entropy estimate                          |
@@ -156,7 +160,7 @@ human-chosen password can be cracked, so storing one would be a risk. Gemma also
 only the stored features and answers, never the password.
 
 **Production note:** the password is sent to the server for analysis. Always serve the
-app over HTTPS, and do not log request bodies.
+app over HTTPS (Render does this automatically), and do not log request bodies.
 
 ### Using the data to improve accuracy
 
@@ -166,6 +170,9 @@ You can use this to tune the penalty weights. Some example queries:
 ```bash
 sqlite3 data/assessments.db
 ```
+
+These queries use SQLite syntax. On Neon, run SQL in the Neon console's SQL Editor,
+and cast the JSON columns, e.g. `answers::jsonb ->> 'contains_name'`.
 
 ```sql
 -- How often each question is answered "yes"
@@ -185,7 +192,11 @@ FROM assessments
 GROUP BY has_name;
 ```
 
-A summary is also available at `GET /api/stats`.
+A summary is also available at `GET /api/stats` (requires `ADMIN_TOKEN`):
+
+```bash
+curl -H "Authorization: Bearer $ADMIN_TOKEN" https://<your-app>.onrender.com/api/stats
+```
 
 ## API
 
@@ -194,8 +205,14 @@ A summary is also available at `GET /api/stats`.
 | GET    | `/api/questions`                      | List the yes/no questions           |
 | POST   | `/api/assess`                         | Analyze a password and store the result |
 | POST   | `/api/assessments/{id}/advice`        | Get AI advice from Gemma (needs `GEMINI_API_KEY`) |
-| POST   | `/api/assessments/{id}/feedback`      | Rate the result                     |
-| GET    | `/api/stats`                          | Aggregated statistics               |
+| POST   | `/api/assessments/{id}/feedback`      | Rate the result (once per assessment) |
+| GET    | `/api/stats`                          | Aggregated statistics (needs `Authorization: Bearer <ADMIN_TOKEN>`) |
+
+`{id}` is the random `id` returned by `/api/assess`.
+
+**Rate limits** (per client IP, in memory): 30 assessments/min, 30 feedback/min,
+5 AI advice/min, and 200 AI advice/hour in total across all users.
+Exceeding a limit returns `429 Too Many Requests`.
 
 Interactive docs: <http://127.0.0.1:8000/docs>.
 
@@ -209,7 +226,7 @@ curl -X POST http://127.0.0.1:8000/api/assess \
 
 ```json
 {
-  "id": 1,
+  "id": "3f9c2a7e5b1d4c8e9a0b6d2f4e7c1a35",
   "score": 6,
   "label": "Very Weak",
   "crack_time_display": "less than a second",
@@ -220,6 +237,42 @@ curl -X POST http://127.0.0.1:8000/api/assess \
 }
 ```
 
+## Deploying (free): Render + Neon
+
+The app runs on [Render](https://render.com)'s free web service. Data is stored in
+[Neon](https://neon.tech)'s free PostgreSQL, because Render's free plan
+deletes local files (including a SQLite database) on every deploy or restart.
+Both services can be used with a GitHub login and no credit card.
+
+### 1. Create the database on Neon
+
+1. Sign up at <https://neon.tech> and create a project (any name; pick a region close to your users).
+2. On the project dashboard, click **Connect** and copy the connection string.
+   It looks like `postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`.
+
+The `assessments` table is created automatically the first time the app starts.
+
+### 2. Deploy the app on Render
+
+1. Sign up at <https://render.com> with GitHub.
+2. Click **New → Blueprint** and select this repository. Render reads `render.yaml`.
+3. When asked for environment variables, set:
+   - `DATABASE_URL`: the Neon connection string from step 1
+   - `GEMINI_API_KEY`: your Gemini API key (optional; leave empty to hide AI advice)
+4. Click **Apply**. The first build takes a few minutes.
+5. Open the URL Render shows (e.g. `https://securepass-ai.onrender.com`) and share it.
+
+Every push to `main` deploys automatically. `ADMIN_TOKEN` is generated by Render;
+find it under the service's **Environment** tab.
+
+### Free plan limits
+
+- **Render:** the service sleeps after 15 minutes without traffic. The next visit
+  takes about 30–60 seconds to wake it up. Open the site once before a demo.
+- **Neon:** 0.5 GB of storage on the free plan, which is enough for over a million
+  assessments. The database also sleeps when idle and wakes in under a second.
+- **Rate limits** are kept in memory, so they reset when the service restarts.
+
 ## Project structure
 
 ```
@@ -229,11 +282,13 @@ curl -X POST http://127.0.0.1:8000/api/assess \
 │   ├── main.py          # FastAPI app and API routes
 │   ├── analyzer.py      # Feature extraction, pattern detection, scoring
 │   ├── questions.py     # All questions, automatic checks, penalties, and advice
-│   ├── db.py            # SQLite storage
+│   ├── db.py            # Storage (SQLite or PostgreSQL)
+│   ├── ratelimit.py     # In-memory rate limiting
 │   └── advisor.py       # Optional Gemma advice
 ├── static/              # Frontend (index.html, app.js, style.css)
 ├── tests/               # pytest tests
 ├── .env.example
+├── render.yaml          # Render deployment config
 └── pyproject.toml
 ```
 
