@@ -1,5 +1,7 @@
 # Password Strength Checker
 
+**Live demo: <https://hackathon-11-oct-2026.vercel.app>** (deployed from `main` on Vercel)
+
 A web app that rates how strong a password is. It combines **automatic analysis** with a few
 **yes/no questions** about things that can't be detected from the password alone, such as
 "Does it contain your name?" or "Do you reuse it on other sites?".
@@ -364,7 +366,7 @@ The `assessments` table is created automatically the first time the app starts.
    - `GEMINI_API_KEY`: your Gemini API key (optional; leave it out to hide AI advice)
    - `ADMIN_TOKEN`: any long random string (optional; enables `/api/stats`)
 3. Click **Deploy**. The first build takes a minute or two.
-4. Open the URL Vercel shows (e.g. `https://securepass-ai.vercel.app`) and share it.
+4. Open the URL Vercel shows (`https://<project-name>.vercel.app`) and share it.
 
 Every push to `main` deploys to that URL automatically, and every pull request gets its
 own preview URL. After changing environment variables, redeploy for them to take effect.
