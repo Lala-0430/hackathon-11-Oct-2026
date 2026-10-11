@@ -6,9 +6,20 @@ A web app that rates how strong a password is. It combines **automatic analysis*
 **yes/no questions** about things that can't be detected from the password alone, such as
 "Does it contain your name?" or "Do you reuse it on other sites?".
 
-No account is needed. The password is analyzed in memory and is **never stored**.
-Each check is saved as an anonymous record (derived features + answers + result),
-so the scoring can be improved over time.
+> **Your password is never stored.**
+>
+> - The password is analyzed in memory and discarded. It is never written to the
+>   database or logs, **not even as a hash**.
+> - Only anonymous, derived features are saved (length, character types, detected
+>   patterns), together with your yes/no answers and the result, so the scoring can be
+>   improved over time.
+> - Gemma (AI advice) never receives the password. Have I Been Pwned receives only the
+>   first 5 characters of its SHA-1 hash.
+> - No account is needed, and the app never asks you to type personal details.
+>
+> Details: [Data collection and privacy](#data-collection-and-privacy).
+
+The same promise is shown at the very top of the Home screen and on the password step, before you type anything.
 
 ## How it works
 
