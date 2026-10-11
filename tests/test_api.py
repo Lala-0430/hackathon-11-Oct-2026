@@ -63,6 +63,20 @@ def test_assess_reports_breach(client, monkeypatch, tmp_path):
     assert "found_in_breach" in patterns
 
 
+def test_assess_returns_improvements(client):
+    body = client.post("/api/assess", json={"password": "sunflower", "answers": {}}).json()
+    assert body["replace_recommended"] is False
+    steps = body["improvements"]
+    assert steps and all({"fix", "score"} <= step.keys() for step in steps)
+    assert steps[0]["score"] > body["score"]
+
+
+def test_passphrase_wordlist_served(client):
+    res = client.get("/static/wordlists/eff-large.txt")
+    assert res.status_code == 200
+    assert len(res.text.split()) == 7776
+
+
 def test_unknown_question_rejected(client):
     res = client.post("/api/assess", json={"password": "x", "answers": {"bogus": True}})
     assert res.status_code == 400

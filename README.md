@@ -13,7 +13,8 @@ so the scoring can be improved over time.
 1. **Enter a password.** It is kept in the browser until you submit.
 2. **Answer yes/no questions** about personal information and how you use the password.
 3. **Get your result:** a 0–100 score, a label (Very Weak → Very Strong), an estimated
-   crack time, the issues found, and concrete tips.
+   crack time, the issues found, concrete tips, and step-by-step changes that would raise
+   the score (or a prompt to replace the password if attackers already know it).
 4. *(Optional)* **Get AI advice** from Gemma, based on the analysis only (never the password).
 5. *(Optional)* **Rate the result** ("Too low" / "Accurate" / "Too high"). This feedback is stored
    with the record and can be used to tune the scoring.
@@ -34,6 +35,7 @@ Browser ◀────────────── score, label, tips ──�
 | Database | SQLite locally, PostgreSQL ([Neon](https://neon.tech)) in production |
 | Frontend | Plain HTML, CSS, and JavaScript (no build)   |
 | AI       | Gemma via the Gemini API (`google-genai`), optional |
+| Breach check | [Have I Been Pwned](https://haveibeenpwned.com/Passwords) Pwned Passwords API (no key needed) |
 | Hosting  | Cloudflare Tunnel from your computer, or [Render](https://render.com) (free plan) |
 | Tooling  | [uv](https://docs.astral.sh/uv/), pytest     |
 
@@ -154,6 +156,26 @@ All questions, automatic checks, penalties, and advice are defined in one place:
 The **crack time** assumes an offline attack at 10 billion guesses per second, using the
 "effective" entropy implied by the final score.
 
+### How to improve
+
+The result lists changes that would raise the score, each with the score it would reach
+(`suggest_improvements()` in `app/analyzer.py`). Every detected weakness has a short `fix`
+in `app/questions.py`, such as "Remove the year" or "Mix upper and lower case".
+The scores come from re-scoring the features as if the change were made: lengthening to
+16 characters, adding character types, dropping a pattern, or answering "no" to a question.
+
+Fixes are applied one at a time, always choosing the one that helps most next, so each step's
+score includes the steps before it. Unclamped scores are compared, so the steps are still
+ranked sensibly when the score is stuck at 0.
+
+When the password is a common password or was found in a breach (automatically or by the
+user's answer), no edits are suggested. The user is told to replace it instead.
+
+The **Password Generator** page creates random-character passwords or passphrases of 4–10
+words from the [EFF large word list](https://www.eff.org/dice)
+([`static/wordlists/eff-large.txt`](static/wordlists/eff-large.txt), CC BY 3.0 US),
+entirely in the browser with `crypto.getRandomValues`.
+
 Every record stores a `scoring_version` (see `SCORING_VERSION` in `app/analyzer.py`).
 Increase it whenever the scoring changes, so old and new results can be compared.
 
@@ -240,21 +262,33 @@ Example:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/assess \
   -H "Content-Type: application/json" \
-  -d '{"password": "Taro1998!", "answers": {"contains_name": true, "contains_birthday": true}}'
+  -d '{"password": "Taro1998!Kz", "answers": {"contains_name": true, "contains_birthday": true}}'
 ```
 
 ```json
 {
   "id": "3f9c2a7e5b1d4c8e9a0b6d2f4e7c1a35",
-  "score": 6,
-  "label": "Very Weak",
+  "score": 20,
+  "label": "Weak",
   "crack_time_display": "less than a second",
   "issues": ["It contains something that looks like a year.", "..."],
   "tips": ["Avoid years. Attackers try 1900-2099 automatically.", "..."],
-  "features": {"length": 9, "entropy_bits": 59.13, "patterns": ["year"], "...": "..."},
+  "features": {"length": 11, "entropy_bits": 72.27, "patterns": ["year"], "breach_count": 0, "...": "..."},
+  "improvements": [
+    {"fix": "Remove your name or nickname", "score": 45},
+    {"fix": "Remove your birth date or year", "score": 70},
+    {"fix": "Make it at least 16 characters long", "score": 90},
+    {"fix": "Remove the year", "score": 100}
+  ],
+  "replace_recommended": false,
   "ai_advice_available": false
 }
 ```
+
+- `features.breach_count`: times seen in breaches, or `null` if the check was skipped.
+- `improvements`: step-by-step fixes; each `score` includes the steps before it.
+- `replace_recommended`: `true` (with empty `improvements`) for common or breached
+  passwords. For example, `Taro1998!` itself has been seen 100 times in breaches.
 
 ## Sharing from your computer (free): Cloudflare Tunnel + Neon
 
@@ -341,13 +375,17 @@ find it under the service's **Environment** tab.
 ├── main.py              # Entry point: starts the Uvicorn server
 ├── app/
 │   ├── main.py          # FastAPI app and API routes
-│   ├── analyzer.py      # Feature extraction, pattern detection, scoring
-│   ├── questions.py     # All questions, automatic checks, penalties, and advice
+│   ├── analyzer.py      # Feature extraction, pattern detection, scoring, improvements
+│   ├── questions.py     # All questions, automatic checks, penalties, advice, and fixes
+│   ├── breach.py        # Have I Been Pwned check (k-anonymity)
+│   ├── wordlists/       # 10,000 most common passwords
 │   ├── db.py            # Storage (SQLite or PostgreSQL)
 │   ├── ratelimit.py     # In-memory rate limiting
 │   └── advisor.py       # Optional Gemma advice
 ├── static/              # Frontend (index.html, app.js, style.css)
+│   └── wordlists/       # EFF word list for the passphrase generator
 ├── tests/               # pytest tests
+├── CLAUDE.md            # Working rules for Claude Code (README-first workflow)
 ├── .env.example
 ├── share.sh             # Share publicly via Cloudflare Tunnel
 ├── render.yaml          # Render deployment config
@@ -360,17 +398,21 @@ find it under the service's **Environment** tab.
 uv run pytest
 ```
 
-The tests cover pattern detection, scoring, the API, and a check that the
-raw password never appears in the database.
+The tests cover pattern detection, scoring, improvement suggestions, the breach check,
+the API, and a check that the raw password never appears in the database.
+They make no network calls: the breach check is mocked or disabled with `BREACH_CHECK=false`.
 
 ## Changing questions or penalties
 
 Edit [`app/questions.py`](app/questions.py):
 
 - **Questions** (`QUESTIONS`): each has an `id`, the question `text`, a `penalty`,
-  and a `tip`. The frontend loads questions from the API, so no frontend change is needed.
+  a `tip`, a short `fix` shown in "How to improve", and optional `overlaps` (automatic
+  checks that cover the same weakness). The frontend loads questions from the API,
+  so no frontend change is needed.
 - **Automatic checks** (`AUTO_CHECKS`): you can change the `issue` text, `penalty`,
-  and `tip` here. Adding a *new* automatic check also needs detection code in
-  `detect_patterns()` in `app/analyzer.py`.
+  `tip`, and `fix` here. Adding a *new* automatic check also needs detection code in
+  `detect_patterns()` in `app/analyzer.py`, and a what-if fix in `_available_fixes()`
+  if it should appear in "How to improve".
 
 Increase `SCORING_VERSION` in `app/analyzer.py` afterwards.

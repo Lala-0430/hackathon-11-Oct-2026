@@ -8,14 +8,15 @@ needs to be stored or sent anywhere else.
 import math
 import re
 import string
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
-from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS_BY_ID
+from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS, QUESTIONS_BY_ID
 
 # Bump this whenever the scoring logic changes, so stored records can be
 # compared across versions.
-SCORING_VERSION = "1.4.0"
+SCORING_VERSION = "1.5.0"
 
 # Assumed attacker speed for an offline attack on a fast hash.
 GUESSES_PER_SECOND = 1e10
@@ -38,6 +39,17 @@ KEYBOARD_PATTERNS = [
 
 LEET_MAP = str.maketrans({"@": "a", "4": "a", "3": "e", "1": "i", "!": "i",
                           "0": "o", "$": "s", "5": "s", "7": "t"})
+
+# Length suggested by "How to improve".
+TARGET_LENGTH = 16
+
+# Weaknesses that editing can't fix: the password should be replaced instead.
+REPLACE_PATTERNS = {"common_password", "found_in_breach"}
+REPLACE_ANSWERS = {"breached"}
+
+# Patterns fixed by simply removing the offending part.
+REMOVABLE_PATTERNS = ["contains_common_word", "keyboard_pattern", "sequence",
+                      "repeated_chars", "year", "date"]
 
 # (min_score, label)
 LABELS = [
@@ -65,6 +77,12 @@ class Features:
 
 
 @dataclass
+class Improvement:
+    fix: str
+    score: int  # score after this fix and all the ones before it
+
+
+@dataclass
 class Assessment:
     score: int
     label: str
@@ -74,6 +92,10 @@ class Assessment:
     issues: list[str]
     tips: list[str]
     features: Features
+    # Step-by-step fixes, most effective first. Filled in by analyze().
+    improvements: list[Improvement] = field(default_factory=list)
+    # True when the password should be replaced rather than edited.
+    replace_recommended: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -139,6 +161,14 @@ def detect_patterns(pw: str) -> list[str]:
     return patterns
 
 
+def _pool_size(lower: bool, upper: bool, digit: bool, symbol: bool, other: bool) -> int:
+    return 26 * lower + 26 * upper + 10 * digit + 33 * symbol + 100 * other
+
+
+def _entropy(length: int, pool: int) -> float:
+    return round(length * math.log2(pool), 2) if pool else 0.0
+
+
 def extract_features(pw: str) -> Features:
     has_lower = any(c in string.ascii_lowercase for c in pw)
     has_upper = any(c in string.ascii_uppercase for c in pw)
@@ -146,9 +176,7 @@ def extract_features(pw: str) -> Features:
     has_symbol = any(c in string.punctuation or c == " " for c in pw)
     has_other = any(not c.isascii() for c in pw)
 
-    pool = (26 * has_lower + 26 * has_upper + 10 * has_digit
-            + 33 * has_symbol + 100 * has_other)
-    entropy = len(pw) * math.log2(pool) if pool else 0.0
+    pool = _pool_size(has_lower, has_upper, has_digit, has_symbol, has_other)
 
     return Features(
         length=len(pw),
@@ -158,7 +186,7 @@ def extract_features(pw: str) -> Features:
         has_symbol=has_symbol,
         has_other=has_other,
         pool_size=pool,
-        entropy_bits=round(entropy, 2),
+        entropy_bits=_entropy(len(pw), pool),
         patterns=detect_patterns(pw),
     )
 
@@ -192,8 +220,8 @@ def format_duration(seconds: float) -> str:
     return "less than a second"
 
 
-def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
-    """Combine password features and yes/no answers into a 0-100 score."""
+def _raw_score(features: Features, answers: dict[str, bool]) -> tuple[float, list[str], list[str]]:
+    """Base score minus penalties (not clamped), with the issues and tips found."""
     base = min(100.0, features.entropy_bits * 100 / BITS_FOR_FULL_SCORE)
 
     issues: list[str] = []
@@ -216,7 +244,17 @@ def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
         issues.append(f"You answered yes to: \"{question.text}\"")
         tips.append(question.tip)
 
-    score = int(round(max(0.0, min(100.0, base - penalty))))
+    return base - penalty, issues, tips
+
+
+def _clamp(raw: float) -> int:
+    return int(round(max(0.0, min(100.0, raw))))
+
+
+def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
+    """Combine password features and yes/no answers into a 0-100 score."""
+    raw, issues, tips = _raw_score(features, answers)
+    score = _clamp(raw)
 
     if score >= 80 and not tips:
         tips.append("Great password. Store it in a password manager and enable 2FA.")
@@ -238,6 +276,86 @@ def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
     )
 
 
+# A fix transforms (features, answers) as if the user had made that change.
+Fix = Callable[[Features, dict[str, bool]], tuple[Features, dict[str, bool]]]
+
+
+def _add_classes(f: Features, fixed: tuple[str, ...], **classes: bool) -> Features:
+    """Copy of `f` with extra character classes and the `fixed` patterns removed."""
+    f = replace(f, patterns=[p for p in f.patterns if p not in fixed], **classes)
+    f.pool_size = _pool_size(f.has_lower, f.has_upper, f.has_digit, f.has_symbol, f.has_other)
+    f.entropy_bits = _entropy(f.length, f.pool_size)
+    return f
+
+
+def _lengthen(f: Features, answers: dict[str, bool]):
+    f = replace(f, length=TARGET_LENGTH,
+                entropy_bits=_entropy(TARGET_LENGTH, f.pool_size),
+                patterns=[p for p in f.patterns if p != "too_short"])
+    return f, answers
+
+
+def _remove_pattern(pattern: str) -> Fix:
+    def fix(f: Features, answers: dict[str, bool]):
+        f = replace(f, patterns=[p for p in f.patterns if p != pattern])
+        # Questions about the same weakness no longer apply either.
+        answers = {q: a and pattern not in QUESTIONS_BY_ID[q].overlaps
+                   for q, a in answers.items()}
+        return f, answers
+    return fix
+
+
+def _answer_no(qid: str) -> Fix:
+    return lambda f, answers: (f, {**answers, qid: False})
+
+
+def _available_fixes(f: Features, answers: dict[str, bool]) -> list[tuple[str, Fix]]:
+    fixes: list[tuple[str, Fix]] = []
+    if f.length < TARGET_LENGTH:
+        fixes.append((AUTO_CHECKS_BY_ID["too_short"].fix, _lengthen))
+    if "digits_only" in f.patterns:
+        fixes.append((AUTO_CHECKS_BY_ID["digits_only"].fix, lambda f, a: (
+            _add_classes(f, ("digits_only",), has_lower=True, has_upper=True), a)))
+    if "letters_only" in f.patterns:
+        fixes.append((AUTO_CHECKS_BY_ID["letters_only"].fix, lambda f, a: (
+            _add_classes(f, ("letters_only",), has_digit=True, has_symbol=True), a)))
+    if "single_case" in f.patterns:
+        fixes.append((AUTO_CHECKS_BY_ID["single_case"].fix, lambda f, a: (
+            _add_classes(f, ("single_case",), has_lower=True, has_upper=True), a)))
+    for pattern in REMOVABLE_PATTERNS:
+        if pattern in f.patterns:
+            fixes.append((AUTO_CHECKS_BY_ID[pattern].fix, _remove_pattern(pattern)))
+    for q in QUESTIONS:
+        if answers.get(q.id) and not any(p in f.patterns for p in q.overlaps):
+            fixes.append((q.fix, _answer_no(q.id)))
+    return fixes
+
+
+def suggest_improvements(assessment: Assessment, answers: dict[str, bool]) -> None:
+    """Fill in step-by-step fixes for a scored password.
+
+    Fixes are applied one at a time, always picking the one that helps most
+    next, so each step's score includes the steps before it. Unclamped scores
+    are compared, so fixes still rank sensibly while the score is stuck at 0.
+    """
+    f = assessment.features
+    if REPLACE_PATTERNS & set(f.patterns) or any(answers.get(q) for q in REPLACE_ANSWERS):
+        assessment.replace_recommended = True
+        return
+
+    state = (f, answers)
+    current = _raw_score(*state)[0]
+    remaining = _available_fixes(f, answers)
+    while remaining and current < 100:
+        options = [(_raw_score(*fix(*state))[0], text, fix) for text, fix in remaining]
+        raw, text, fix = max(options, key=lambda o: o[0])
+        if raw <= current:
+            break
+        state, current = fix(*state), raw
+        remaining = [(t, x) for t, x in remaining if t != text]
+        assessment.improvements.append(Improvement(text, _clamp(raw)))
+
+
 def analyze(password: str, answers: dict[str, bool],
             breach_count: int | None = None) -> Assessment:
     """Score a password. `breach_count` comes from app.breach (None = unknown)."""
@@ -245,4 +363,6 @@ def analyze(password: str, answers: dict[str, bool],
     features.breach_count = breach_count
     if breach_count:
         features.patterns.insert(0, "found_in_breach")
-    return score_features(features, answers)
+    assessment = score_features(features, answers)
+    suggest_improvements(assessment, answers)
+    return assessment

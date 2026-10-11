@@ -226,6 +226,7 @@ function renderResult(r) {
   $("issues-block").classList.toggle("hidden", r.issues.length === 0);
   fillList($("issues"), r.issues);
   fillList($("tips"), r.tips);
+  renderImprovements(r);
 
   $("ai-button").disabled = !r.ai_advice_available;
   $("ai-sub").textContent = r.ai_advice_available
@@ -240,6 +241,35 @@ function renderResult(r) {
 
   showStep("step-result");
 }
+
+function renderImprovements(r) {
+  const steps = r.improvements;
+  $("improve-block").classList.toggle("hidden", !steps.length && !r.replace_recommended);
+  $("improve-intro").classList.toggle("hidden", !steps.length);
+  $("improvements").classList.toggle("hidden", !steps.length);
+  $("replace-note").classList.toggle("hidden", !r.replace_recommended);
+
+  let previous = r.score;
+  $("improvements").replaceChildren(...steps.map((step) => {
+    const li = document.createElement("li");
+    const fix = document.createElement("span");
+    fix.textContent = step.fix;
+    const score = document.createElement("span");
+    score.className = "step-score";
+    score.textContent = step.score;
+    const gain = document.createElement("span");
+    gain.className = "gain";
+    gain.textContent = step.score > previous ? `+${step.score - previous}` : "";
+    previous = step.score;
+    li.append(fix, score, gain);
+    return li;
+  }));
+}
+
+$("improve-passphrase").addEventListener("click", () => {
+  setGeneratorMode("words");
+  showView("generator");
+});
 
 function animateNumber(el, target) {
   const start = performance.now();
@@ -340,7 +370,51 @@ function randomInt(max) {
   return buf[0] % max;
 }
 
+let generatorMode = "chars";
+let passphraseWords = null; // EFF large word list, loaded on first use
+
+function setGeneratorMode(mode) {
+  generatorMode = mode;
+  document.querySelectorAll("[data-gen-mode]").forEach((b) => {
+    const active = b.dataset.genMode === mode;
+    b.classList.toggle("selected", active);
+    b.setAttribute("aria-pressed", active);
+  });
+  $("gen-chars-options").classList.toggle("hidden", mode !== "chars");
+  $("gen-words-options").classList.toggle("hidden", mode !== "words");
+  generatePassword();
+}
+
+async function generatePassphrase() {
+  if (!passphraseWords) {
+    try {
+      const res = await fetch("/static/wordlists/eff-large.txt");
+      if (!res.ok) throw new Error();
+      passphraseWords = (await res.text()).split("\n").filter(Boolean);
+    } catch {
+      $("gen-output").value = "";
+      $("gen-words-bits").textContent = "Could not load the word list.";
+      return;
+    }
+  }
+  const count = Number($("gen-words").value);
+  const words = Array.from({ length: count }, () => passphraseWords[randomInt(passphraseWords.length)]);
+  const capitalize = $("gen-capitalize").checked;
+  const formatted = words.map((w) => (capitalize ? w[0].toUpperCase() + w.slice(1) : w));
+  let bits = count * Math.log2(passphraseWords.length);
+  if ($("gen-number").checked) {
+    formatted[randomInt(count)] += randomInt(10);
+    bits += Math.log2(10);
+  }
+  $("gen-output").value = formatted.join("-");
+  $("gen-words-bits").textContent = `About ${Math.floor(bits)} bits of randomness.`;
+}
+
 function generatePassword() {
+  if (generatorMode === "words") {
+    generatePassphrase();
+    return;
+  }
   const sets = Object.keys(CHARSETS).filter((id) => $(id).checked).map((id) => CHARSETS[id]);
   if (!sets.length) {
     $("gen-lower").checked = true;
@@ -364,6 +438,14 @@ $("gen-length").addEventListener("input", (e) => {
 });
 Object.keys(CHARSETS).forEach((id) => $(id).addEventListener("change", generatePassword));
 $("gen-refresh").addEventListener("click", generatePassword);
+document.querySelectorAll("[data-gen-mode]").forEach((b) => {
+  b.addEventListener("click", () => setGeneratorMode(b.dataset.genMode));
+});
+$("gen-words").addEventListener("input", (e) => {
+  $("gen-words-value").textContent = e.target.value;
+  generatePassword();
+});
+["gen-capitalize", "gen-number"].forEach((id) => $(id).addEventListener("change", generatePassword));
 
 $("gen-copy").addEventListener("click", async () => {
   try {

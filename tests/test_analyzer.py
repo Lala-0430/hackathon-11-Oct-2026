@@ -103,3 +103,47 @@ def test_breach_check_unknown_or_clean_changes_nothing():
         result = analyze(pw, {}, breach_count=count)
         assert "found_in_breach" not in result.features.patterns
     assert analyze(pw, {"breached": True}, breach_count=0).score == analyze(pw, {}).score - 30
+
+
+def test_improvements_are_cumulative_steps():
+    result = analyze("sunflower", {})
+    scores = [i.score for i in result.improvements]
+    assert scores == sorted(scores)
+    assert scores[0] > result.score
+    assert result.improvements[0].fix == "Make it at least 16 characters long"
+    assert not result.replace_recommended
+
+
+def test_improvements_rank_fixes_while_score_is_zero():
+    result = analyze("mike1990", {"contains_name": True, "contains_birthday": True, "reused": True})
+    assert result.score == 0
+    fixes = [i.fix for i in result.improvements]
+    assert "Remove your name or nickname" in fixes
+    assert "Use it on this account only" in fixes
+    assert result.improvements[-1].score > 50
+
+
+def test_fixing_auto_pattern_clears_overlapping_question():
+    result = analyze("Zr!abc9Kq#2mWx", {"predictable_sequence": True})
+    assert [(i.fix, i.score) for i in result.improvements] == [("Remove the sequence", 100)]
+
+
+def test_replace_recommended_instead_of_improvements():
+    for pw, answers, count in [("password", {}, None),
+                               ("t7#Vq!x9Lm@2Rz$Kp4&", {"breached": True}, None),
+                               ("t7#Vq!x9Lm@2Rz$Kp4&", {}, 5)]:
+        result = analyze(pw, answers, breach_count=count)
+        assert result.replace_recommended
+        assert result.improvements == []
+
+
+def test_strong_password_needs_no_improvements():
+    result = analyze("t7#Vq!x9Lm@2Rz$Kp4&", {})
+    assert result.improvements == []
+    assert not result.replace_recommended
+
+
+def test_every_rule_has_a_fix():
+    from app.questions import AUTO_CHECKS, QUESTIONS
+
+    assert all(rule.fix for rule in [*AUTO_CHECKS, *QUESTIONS])

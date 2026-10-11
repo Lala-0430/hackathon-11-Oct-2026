@@ -223,6 +223,21 @@
             </button>
           </div>
 
+          <div class="panel improve-card hidden" id="improve-block">
+            <div class="improve-head">
+              <h3 class="title-accent"><svg><use href="#i-chart"/></svg>How to improve</h3>
+              <p class="muted small" id="improve-intro">Make these changes in order to raise your score.</p>
+            </div>
+            <ol id="improvements" class="improve-steps"></ol>
+            <p id="replace-note" class="replace-note hidden">
+              <svg><use href="#i-alert"/></svg>
+              <span>Attackers already know this password, so editing it won't help. Replace it with a new one.</span>
+            </p>
+            <button type="button" id="improve-passphrase" class="btn btn-outline">
+              <svg><use href="#i-generate"/></svg> Start fresh with a passphrase
+            </button>
+          </div>
+
           <div class="result-footer">
             <div class="feedback">
               <div>
@@ -246,19 +261,36 @@
         <div class="panel narrow">
           <h2>Password Generator</h2>
           <p class="muted">Generated in your browser with a cryptographically secure random source.</p>
+          <div class="segmented" role="group" aria-label="Generator type">
+            <button type="button" class="btn btn-chip selected" data-gen-mode="chars" aria-pressed="true">Random characters</button>
+            <button type="button" class="btn btn-chip" data-gen-mode="words" aria-pressed="false">Passphrase</button>
+          </div>
           <div class="field">
             <input id="gen-output" type="text" readonly aria-label="Generated password">
             <button type="button" id="gen-copy" class="field-icon" aria-label="Copy"><svg><use href="#i-copy"/></svg></button>
           </div>
-          <label class="range-row">
-            <span>Length <strong id="gen-length-value">20</strong></span>
-            <input type="range" id="gen-length" min="8" max="64" value="20">
-          </label>
-          <div class="gen-options">
-            <label class="check"><input type="checkbox" id="gen-lower" checked> Lowercase (a-z)</label>
-            <label class="check"><input type="checkbox" id="gen-upper" checked> Uppercase (A-Z)</label>
-            <label class="check"><input type="checkbox" id="gen-digits" checked> Numbers (0-9)</label>
-            <label class="check"><input type="checkbox" id="gen-symbols" checked> Symbols (!@#…)</label>
+          <div id="gen-chars-options">
+            <label class="range-row">
+              <span>Length <strong id="gen-length-value">20</strong></span>
+              <input type="range" id="gen-length" min="8" max="64" value="20">
+            </label>
+            <div class="gen-options">
+              <label class="check"><input type="checkbox" id="gen-lower" checked> Lowercase (a-z)</label>
+              <label class="check"><input type="checkbox" id="gen-upper" checked> Uppercase (A-Z)</label>
+              <label class="check"><input type="checkbox" id="gen-digits" checked> Numbers (0-9)</label>
+              <label class="check"><input type="checkbox" id="gen-symbols" checked> Symbols (!@#…)</label>
+            </div>
+          </div>
+          <div id="gen-words-options" class="hidden">
+            <label class="range-row">
+              <span>Words <strong id="gen-words-value">5</strong></span>
+              <input type="range" id="gen-words" min="4" max="10" value="5">
+            </label>
+            <div class="gen-options">
+              <label class="check"><input type="checkbox" id="gen-capitalize" checked> Capitalise words</label>
+              <label class="check"><input type="checkbox" id="gen-number" checked> Add a number</label>
+            </div>
+            <p class="muted small gen-note">Random words from the <a href="https://www.eff.org/dice" target="_blank" rel="noopener">EFF word list</a>: easy to remember, hard to guess. <span id="gen-words-bits"></span></p>
           </div>
           <div class="actions">
             <button type="button" id="gen-refresh" class="btn btn-ghost"><svg><use href="#i-refresh"/></svg> Regenerate</button>
