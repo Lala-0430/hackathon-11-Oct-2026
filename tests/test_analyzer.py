@@ -14,6 +14,26 @@ def test_leet_variant_of_common_password_is_detected():
     assert "common_password" in detect_patterns("P@ssw0rd")
 
 
+def test_common_password_list_is_loaded():
+    from app.analyzer import COMMON_PASSWORDS
+
+    assert len(COMMON_PASSWORDS) >= 10000
+    assert "common_password" in detect_patterns("Mustang")
+    assert "common_password" in detect_patterns("password123")
+
+
+def test_common_password_with_extras_is_detected():
+    assert "contains_common_word" in detect_patterns("xxpassword99")
+    assert "contains_common_word" in detect_patterns("summer1998")
+    assert "contains_common_word" in detect_patterns("$h@d0w!!")
+
+
+def test_short_common_word_in_long_password_is_not_flagged():
+    patterns = detect_patterns("correcthorsebatterystaple")
+    assert "common_password" not in patterns
+    assert "contains_common_word" not in patterns
+
+
 def test_long_random_password_is_very_strong():
     result = analyze("t7#Vq!x9Lm@2Rz$Kp4&", {})
     assert result.label == "Very Strong"

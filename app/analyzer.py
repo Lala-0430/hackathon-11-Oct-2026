@@ -9,12 +9,13 @@ import math
 import re
 import string
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS_BY_ID
 
 # Bump this whenever the scoring logic changes, so stored records can be
 # compared across versions.
-SCORING_VERSION = "1.2.0"
+SCORING_VERSION = "1.3.0"
 
 # Assumed attacker speed for an offline attack on a fast hash.
 GUESSES_PER_SECOND = 1e10
@@ -22,20 +23,13 @@ GUESSES_PER_SECOND = 1e10
 # Number of entropy bits that maps to a base score of 100.
 BITS_FOR_FULL_SCORE = 90
 
-COMMON_PASSWORDS = {
-    "123456", "123456789", "12345678", "12345", "1234567", "1234567890",
-    "111111", "000000", "123123", "654321", "666666", "121212", "112233",
-    "password", "password1", "password123", "passw0rd", "qwerty", "qwerty123",
-    "qwertyuiop", "abc123", "iloveyou", "admin", "welcome", "letmein",
-    "monkey", "dragon", "football", "baseball", "sunshine", "princess",
-    "master", "shadow", "superman", "batman", "trustno1", "login", "starwars",
-    "hello", "freedom", "whatever", "michael", "jennifer", "charlie",
-    "secret", "access", "computer", "pokemon", "soccer", "hockey", "killer",
-    "ninja", "mustang", "jordan", "hunter", "ranger", "buster", "thomas",
-    "tigger", "robert", "summer", "winter", "flower", "cookie", "chocolate",
-    "lovely", "angel", "loveme", "zaq12wsx", "1q2w3e4r", "1qaz2wsx",
-    "asdfghjkl", "asdf", "zxcvbnm", "qazwsx", "changeme", "default",
-}
+# The 10,000 most common passwords (SecLists, MIT license), lowercase.
+COMMON_PASSWORDS = frozenset(
+    (Path(__file__).parent / "wordlists" / "common-passwords.txt").read_text().split()
+)
+
+# Shortest common password that counts when found inside a longer password.
+MIN_COMMON_WORD_LENGTH = 5
 
 KEYBOARD_PATTERNS = [
     "qwertyuiop", "asdfghjkl", "zxcvbnm", "1234567890",
@@ -105,13 +99,21 @@ def _has_keyboard_pattern(pw: str, run: int = 4) -> bool:
     return False
 
 
+def _contains_common_password(pw: str) -> bool:
+    """True if a common password makes up at least half of `pw`."""
+    min_len = max(MIN_COMMON_WORD_LENGTH, (len(pw) + 1) // 2)
+    return any(pw[i:j] in COMMON_PASSWORDS
+               for i in range(len(pw))
+               for j in range(i + min_len, len(pw) + 1))
+
+
 def detect_patterns(pw: str) -> list[str]:
     patterns: list[str] = []
     normalized = pw.lower().translate(LEET_MAP)
 
     if pw.lower() in COMMON_PASSWORDS or normalized in COMMON_PASSWORDS:
         patterns.append("common_password")
-    elif any(len(w) >= 5 and w in normalized for w in COMMON_PASSWORDS):
+    elif _contains_common_password(pw.lower()) or _contains_common_password(normalized):
         patterns.append("contains_common_word")
 
     if _has_keyboard_pattern(pw):

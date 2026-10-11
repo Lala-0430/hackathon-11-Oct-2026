@@ -89,7 +89,7 @@ All questions, automatic checks, penalties, and advice are defined in one place:
    | Pattern                | Penalty | Example          |
    |------------------------|---------|------------------|
    | Common password        | 100     | `password`, `P@ssw0rd` |
-   | Contains common password | 20    | `xxpassword99`   |
+   | Contains common password | 20    | `xxpassword99`, `summer1998` |
    | Keyboard pattern       | 15      | `qwer`, `asdf`   |
    | Sequence               | 10      | `abc`, `321`     |
    | Repeated characters    | 10      | `aaa`            |
@@ -99,6 +99,14 @@ All questions, automatic checks, penalties, and advice are defined in one place:
    | Digits only            | 20      | `48291736`       |
    | Shorter than 8         | 20      | `a1!b`           |
    | All one case           | 10      | `sunflower99`, `HELLO!` |
+
+   Common passwords come from the 10,000 most common passwords in
+   [SecLists](https://github.com/danielmiessler/SecLists) (MIT license), stored in
+   [`app/wordlists/common-passwords.txt`](app/wordlists/common-passwords.txt).
+   Leet substitutions are undone before matching (`P@ssw0rd` → `password`).
+   "Contains common password" only applies when the common password (5+ characters)
+   makes up at least half of the password, so a passphrase such as
+   `correcthorsebatterystaple` is not penalized for containing `horse`.
 
 3. **Question penalties.** Each "yes" answer subtracts points:
 
