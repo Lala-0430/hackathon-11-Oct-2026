@@ -30,7 +30,11 @@ class RateLimiter:
 
 
 def client_ip(request: Request) -> str:
-    # Behind a hosting proxy (e.g. Render), the client IP is in X-Forwarded-For.
+    # Behind Cloudflare (e.g. Cloudflare Tunnel), the client IP is in CF-Connecting-IP.
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    # Behind other hosting proxies (e.g. Render), it is in X-Forwarded-For.
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()

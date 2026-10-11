@@ -115,3 +115,17 @@ def test_index_served(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "Password Strength Checker" in res.text
+
+
+def test_client_ip_prefers_cloudflare_header():
+    from starlette.requests import Request
+
+    from app.ratelimit import client_ip
+
+    def req(headers):
+        raw = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
+        return Request({"type": "http", "headers": raw, "client": ("127.0.0.1", 1234)})
+
+    assert client_ip(req({"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "5.6.7.8"})) == "1.2.3.4"
+    assert client_ip(req({"X-Forwarded-For": "5.6.7.8, 10.0.0.1"})) == "5.6.7.8"
+    assert client_ip(req({})) == "127.0.0.1"

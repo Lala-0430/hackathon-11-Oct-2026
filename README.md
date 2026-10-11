@@ -33,7 +33,7 @@ Browser ◀────────────── score, label, tips ──�
 | Database | SQLite locally, PostgreSQL ([Neon](https://neon.tech)) in production |
 | Frontend | Plain HTML, CSS, and JavaScript (no build)   |
 | AI       | Gemma via the Gemini API (`google-genai`), optional |
-| Hosting  | [Render](https://render.com) (free plan)     |
+| Hosting  | Cloudflare Tunnel from your computer, or [Render](https://render.com) (free plan) |
 | Tooling  | [uv](https://docs.astral.sh/uv/), pytest     |
 
 ## Getting started
@@ -237,7 +237,49 @@ curl -X POST http://127.0.0.1:8000/api/assess \
 }
 ```
 
-## Deploying (free): Render + Neon
+## Sharing from your computer (free): Cloudflare Tunnel + Neon
+
+The quickest free way to share the app is to run it on your own computer and expose it
+with a [Cloudflare quick tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/do-more-with-tunnels/trycloudflare/).
+No Cloudflare account or credit card is needed. Data is stored in
+[Neon](https://neon.tech)'s free PostgreSQL, so it is kept even when your computer is off.
+
+### Setup (once)
+
+1. Install cloudflared:
+
+   ```bash
+   brew install cloudflared
+   ```
+
+2. Create a free project on <https://neon.tech>, click **Connect**, and copy the connection string.
+3. Add it to `.env` (never commit this file), together with an admin token for `/api/stats`:
+
+   ```bash
+   DATABASE_URL=postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+   ADMIN_TOKEN=any-long-random-string
+   ```
+
+### Start sharing
+
+```bash
+./share.sh
+```
+
+This starts the app and the tunnel. After a few seconds, a public URL like
+`https://<random-words>.trycloudflare.com` appears in the output. Share that URL.
+Press `Ctrl+C` to stop.
+
+Notes:
+
+- The app is only reachable while `share.sh` is running and your computer is awake
+  and online. `share.sh` keeps a Mac awake with `caffeinate`, but closing the lid still
+  puts it to sleep.
+- **The URL changes every time you restart `share.sh`.** For a fixed URL, use a named
+  tunnel with a Cloudflare account and your own domain, or deploy to Render (below).
+- Quick tunnels have no uptime guarantee and are meant for demos and testing.
+
+## Deploying to Render (always on)
 
 The app runs on [Render](https://render.com)'s free web service. Data is stored in
 [Neon](https://neon.tech)'s free PostgreSQL, because Render's free plan
@@ -288,6 +330,7 @@ find it under the service's **Environment** tab.
 ├── static/              # Frontend (index.html, app.js, style.css)
 ├── tests/               # pytest tests
 ├── .env.example
+├── share.sh             # Share publicly via Cloudflare Tunnel
 ├── render.yaml          # Render deployment config
 └── pyproject.toml
 ```
