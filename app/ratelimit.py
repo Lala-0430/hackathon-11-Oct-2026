@@ -3,6 +3,7 @@
 Good enough for a single server instance. Limits reset when the server restarts.
 """
 
+import os
 import time
 from collections import defaultdict, deque
 
@@ -31,10 +32,11 @@ class RateLimiter:
 
 def client_ip(request: Request) -> str:
     # Behind Cloudflare (e.g. Cloudflare Tunnel), the client IP is in CF-Connecting-IP.
+    # On Vercel nothing sets that header, so a client could forge it: ignore it there.
     cf_ip = request.headers.get("cf-connecting-ip")
-    if cf_ip:
+    if cf_ip and not os.environ.get("VERCEL"):
         return cf_ip.strip()
-    # Behind other hosting proxies (e.g. Render), it is in X-Forwarded-For.
+    # Behind other hosting proxies (e.g. Vercel), it is in X-Forwarded-For.
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()

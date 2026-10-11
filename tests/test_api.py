@@ -147,7 +147,7 @@ def test_index_served(client):
     assert "Password Strength Checker" in res.text
 
 
-def test_client_ip_prefers_cloudflare_header():
+def test_client_ip_prefers_cloudflare_header(monkeypatch):
     from starlette.requests import Request
 
     from app.ratelimit import client_ip
@@ -159,3 +159,6 @@ def test_client_ip_prefers_cloudflare_header():
     assert client_ip(req({"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "5.6.7.8"})) == "1.2.3.4"
     assert client_ip(req({"X-Forwarded-For": "5.6.7.8, 10.0.0.1"})) == "5.6.7.8"
     assert client_ip(req({})) == "127.0.0.1"
+
+    monkeypatch.setenv("VERCEL", "1")  # forged CF header is ignored on Vercel
+    assert client_ip(req({"CF-Connecting-IP": "1.2.3.4", "X-Forwarded-For": "5.6.7.8"})) == "5.6.7.8"
