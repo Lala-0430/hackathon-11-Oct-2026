@@ -1,20 +1,15 @@
 import os
 
-from dotenv import load_dotenv
-from google import genai
-
-load_dotenv()
-
-MODEL = os.environ.get("GEMMA_MODEL", "gemma-4-26b-a4b-it")
+import uvicorn
 
 
 def main():
-    client = genai.Client()  # GEMINI_API_KEY を環境変数から読み込む
-    response = client.models.generate_content(
-        model=MODEL,
-        contents="Roses are red...",
+    uvicorn.run(
+        "app.main:app",
+        host=os.environ.get("HOST", "127.0.0.1"),
+        port=int(os.environ.get("PORT", "8000")),
+        reload=os.environ.get("RELOAD", "false").lower() == "true",
     )
-    print(response.text)
 
 
 if __name__ == "__main__":

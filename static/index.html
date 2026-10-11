@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Password Strength Checker</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="card">
+    <header>
+      <h1>Password Strength Checker</h1>
+      <p class="subtitle">No account needed. Your password is never stored.</p>
+    </header>
+
+    <!-- Step 1: password -->
+    <section id="step-password" class="step">
+      <form id="password-form">
+        <label for="password">Enter a password to check</label>
+        <div class="input-row">
+          <input id="password" type="password" autocomplete="off" maxlength="256" required>
+          <button type="button" id="toggle-visibility" class="secondary">Show</button>
+        </div>
+        <button type="submit">Next</button>
+      </form>
+    </section>
+
+    <!-- Step 2: yes/no questions -->
+    <section id="step-questions" class="step hidden">
+      <h2>A few quick questions</h2>
+      <p class="hint">These help us spot weaknesses that can't be detected from the password alone.</p>
+      <form id="questions-form">
+        <ol id="question-list"></ol>
+        <div class="actions">
+          <button type="button" id="back" class="secondary">Back</button>
+          <button type="submit">Check strength</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Step 3: result -->
+    <section id="step-result" class="step hidden">
+      <div class="score-header">
+        <span id="result-label" class="label"></span>
+        <span id="result-score" class="score"></span>
+      </div>
+      <div class="meter"><div id="meter-fill"></div></div>
+      <p class="crack-time">Estimated time to crack: <strong id="crack-time"></strong></p>
+
+      <div id="issues-block">
+        <h3>Issues found</h3>
+        <ul id="issues"></ul>
+      </div>
+      <h3>Tips</h3>
+      <ul id="tips"></ul>
+
+      <div id="ai-block" class="hidden">
+        <button type="button" id="ai-button" class="secondary">Get AI advice (Gemma)</button>
+        <div id="ai-advice" class="ai-advice hidden"></div>
+      </div>
+
+      <div class="feedback">
+        <p>Does this rating feel right?</p>
+        <div class="feedback-buttons">
+          <button type="button" class="secondary" data-feedback="too_low">Too low</button>
+          <button type="button" class="secondary" data-feedback="accurate">Accurate</button>
+          <button type="button" class="secondary" data-feedback="too_high">Too high</button>
+        </div>
+        <p id="feedback-thanks" class="hint hidden">Thanks! Your feedback helps improve accuracy.</p>
+      </div>
+
+      <button type="button" id="restart">Check another password</button>
+    </section>
+
+    <footer>
+      We store only anonymous features (length, character types, detected patterns),
+      your yes/no answers, and the result to improve accuracy. Never the password itself.
+    </footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
