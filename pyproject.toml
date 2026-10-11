@@ -1,0 +1,9 @@
+[project]
+name = "hackathon-11-oct-2026"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "google-genai>=2.29.0",
+    "python-dotenv>=1.2.4",
+]
