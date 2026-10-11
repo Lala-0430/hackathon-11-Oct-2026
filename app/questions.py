@@ -89,6 +89,7 @@ QUESTIONS: list[Question] = [
         text="Has this password ever appeared in a data breach, for example in a breach alert?",
         penalty=30,
         tip="A password that has leaked once is in attackers' lists and should never be used again.",
+        overlaps=("found_in_breach",),
     ),
 ]
 
@@ -103,8 +104,17 @@ class AutoCheck:
     tip: str
 
 
-# The detection logic for each id lives in analyzer.detect_patterns().
+# The detection logic for each id lives in analyzer.detect_patterns(), except
+# found_in_breach, which comes from app/breach.py (see analyzer.analyze()).
+# `issue` may use {breach_count}.
 AUTO_CHECKS: list[AutoCheck] = [
+    AutoCheck(
+        id="found_in_breach",
+        issue="It appears in known data breaches (seen {breach_count:,} times).",
+        penalty=100,
+        tip="Leaked passwords are in every attacker's list. Never use this one again, "
+            "and change it anywhere you still use it.",
+    ),
     AutoCheck(
         id="common_password",
         issue="This is one of the most common passwords.",

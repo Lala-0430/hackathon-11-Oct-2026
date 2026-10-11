@@ -20,6 +20,7 @@ so the scoring can be improved over time.
 
 ```
 Browser ──POST /api/assess {password, answers}──▶ FastAPI
+                                                   ├─ Have I Been Pwned: first 5 chars of SHA-1 only
                                                    ├─ analyzer: features + score (in memory)
                                                    └─ DB: features, answers, score   ← no password
 Browser ◀────────────── score, label, tips ────────┘
@@ -74,6 +75,7 @@ All settings are optional and read from the environment or `.env`.
 | `HOST`           | `127.0.0.1`             | Server host                                  |
 | `PORT`           | `8000`                  | Server port                                  |
 | `RELOAD`         | `false`                 | Auto-reload on code changes                  |
+| `BREACH_CHECK`   | `true`                  | Set to `false` to skip the Have I Been Pwned check |
 
 ## Scoring
 
@@ -88,6 +90,7 @@ All questions, automatic checks, penalties, and advice are defined in one place:
 
    | Pattern                | Penalty | Example          |
    |------------------------|---------|------------------|
+   | Found in a data breach | 100     | `Tr0ub4dor&3`    |
    | Common password        | 100     | `password`, `P@ssw0rd` |
    | Contains common password | 20    | `xxpassword99`, `summer1998` |
    | Keyboard pattern       | 15      | `qwer`, `asdf`   |
@@ -108,6 +111,12 @@ All questions, automatic checks, penalties, and advice are defined in one place:
    makes up at least half of the password, so a passphrase such as
    `correcthorsebatterystaple` is not penalized for containing `horse`.
 
+   "Found in a data breach" uses the [Have I Been Pwned](https://haveibeenpwned.com/Passwords)
+   Pwned Passwords range API ([`app/breach.py`](app/breach.py)). Only the first 5 characters of
+   the password's SHA-1 hash are sent, with response padding enabled; the match is done on the
+   server. If the API is unreachable (3-second timeout), the check is skipped and the
+   "data breach" question is scored as usual. When a breach is found, that question is skipped.
+
 3. **Question penalties.** Each "yes" answer subtracts points:
 
    | Question                                                          | Penalty |
@@ -122,11 +131,12 @@ All questions, automatic checks, penalties, and advice are defined in one place:
    | Based on a favourite team, band, hobby or brand                   | 10      |
    | A normal word with simple swaps (e.g. `a` → `@`, `o` → `0`)       | 15      |
    | Shared with anyone else                                           | 10      |
-   | Appeared in a data breach                                         | 30      |
+   | Appeared in a data breach                                         | 30*     |
 
-   \* Skipped if a sequence, keyboard pattern, or repeated characters were already
-   detected automatically, so the same weakness is not counted twice
-   (see `overlaps` in `app/questions.py`).
+   \* Skipped if the same weakness was already detected automatically, so it is not
+   counted twice (see `overlaps` in `app/questions.py`): the sequence question when a
+   sequence, keyboard pattern, or repeated characters were found, and the data breach
+   question when Have I Been Pwned found the password.
 
    Things the app can check from the password itself (common passwords, length,
    digits/letters only, single case) are detected automatically instead of being asked.
@@ -165,7 +175,8 @@ Increase it whenever the scoring changes, so old and new results can be compared
 
 **What is never stored:** the password itself or any hash of it. A hash of a short,
 human-chosen password can be cracked, so storing one would be a risk. Gemma also receives
-only the stored features and answers, never the password.
+only the stored features and answers, never the password. Have I Been Pwned receives only
+the first 5 characters of the SHA-1 hash, which matches hundreds of different passwords.
 
 **Production note:** the password is sent to the server for analysis. Always serve the
 app over HTTPS (Render does this automatically), and do not log request bodies.

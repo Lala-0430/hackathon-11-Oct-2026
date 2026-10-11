@@ -15,7 +15,7 @@ from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS_BY_ID
 
 # Bump this whenever the scoring logic changes, so stored records can be
 # compared across versions.
-SCORING_VERSION = "1.3.0"
+SCORING_VERSION = "1.4.0"
 
 # Assumed attacker speed for an offline attack on a fast hash.
 GUESSES_PER_SECOND = 1e10
@@ -60,6 +60,8 @@ class Features:
     pool_size: int
     entropy_bits: float
     patterns: list[str] = field(default_factory=list)
+    # Times seen in known breaches (Have I Been Pwned), or None if not checked.
+    breach_count: int | None = None
 
 
 @dataclass
@@ -201,7 +203,7 @@ def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
     for pattern in features.patterns:
         check = AUTO_CHECKS_BY_ID[pattern]
         penalty += check.penalty
-        issues.append(check.issue)
+        issues.append(check.issue.format(breach_count=features.breach_count))
         tips.append(check.tip)
 
     for qid, answer in answers.items():
@@ -236,5 +238,11 @@ def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
     )
 
 
-def analyze(password: str, answers: dict[str, bool]) -> Assessment:
-    return score_features(extract_features(password), answers)
+def analyze(password: str, answers: dict[str, bool],
+            breach_count: int | None = None) -> Assessment:
+    """Score a password. `breach_count` comes from app.breach (None = unknown)."""
+    features = extract_features(password)
+    features.breach_count = breach_count
+    if breach_count:
+        features.patterns.insert(0, "found_in_breach")
+    return score_features(features, answers)

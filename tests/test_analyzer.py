@@ -81,7 +81,25 @@ def test_every_detectable_pattern_has_an_auto_check():
     from app import analyzer
     from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS
 
-    detected_ids = set(re.findall(r'patterns\.append\("(\w+)"\)', inspect.getsource(analyzer)))
+    detected_ids = set(re.findall(r'patterns\.(?:append\(|insert\(0, )"(\w+)"\)', inspect.getsource(analyzer)))
     assert detected_ids == set(AUTO_CHECKS_BY_ID)
     for q in QUESTIONS:
         assert set(q.overlaps) <= set(AUTO_CHECKS_BY_ID)
+
+
+def test_breach_count_adds_auto_check_and_skips_question():
+    pw = "t7#Vq!x9Lm@2Rz$Kp4&"
+    breached = analyze(pw, {"breached": True}, breach_count=1234)
+    assert "found_in_breach" in breached.features.patterns
+    assert breached.features.breach_count == 1234
+    assert breached.score == 0
+    assert any("1,234 times" in issue for issue in breached.issues)
+    assert not any("You answered yes" in issue for issue in breached.issues)
+
+
+def test_breach_check_unknown_or_clean_changes_nothing():
+    pw = "t7#Vq!x9Lm@2Rz$Kp4&"
+    for count in (None, 0):
+        result = analyze(pw, {}, breach_count=count)
+        assert "found_in_breach" not in result.features.patterns
+    assert analyze(pw, {"breached": True}, breach_count=0).score == analyze(pw, {}).score - 30

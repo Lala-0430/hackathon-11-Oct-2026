@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from app import advisor, db  # noqa: E402  (load .env before reading config)
+from app import advisor, breach, db  # noqa: E402  (load .env before reading config)
 from app.analyzer import analyze  # noqa: E402
 from app.questions import QUESTIONS, QUESTIONS_BY_ID  # noqa: E402
 from app.ratelimit import RateLimiter, client_ip  # noqa: E402
@@ -61,7 +61,7 @@ def assess(req: AssessRequest, request: Request):
         raise HTTPException(400, f"Unknown question ids: {sorted(unknown)}")
 
     # The password is used here in memory only and is never stored or logged.
-    result = analyze(req.password, req.answers)
+    result = analyze(req.password, req.answers, breach.breach_count(req.password))
     assessment_id = db.save_assessment(result, req.answers)
 
     body = result.to_dict()

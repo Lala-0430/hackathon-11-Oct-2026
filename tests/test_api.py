@@ -13,6 +13,7 @@ def client(tmp_path, monkeypatch):
     from app import main
 
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setenv("BREACH_CHECK", "false")  # no network calls in tests
     for var in ("GEMINI_API_KEY", "DATABASE_URL", "ADMIN_TOKEN"):
         monkeypatch.delenv(var, raising=False)
     for limiter in (main.assess_limiter, main.feedback_limiter, main.advice_limiter):
@@ -45,6 +46,21 @@ def test_assess_stores_features_but_not_password(client, tmp_path):
     assert len(rows) == 1
     assert SECRET not in repr(rows)
     assert SECRET.lower() not in repr(rows).lower()
+
+
+def test_assess_reports_breach(client, monkeypatch, tmp_path):
+    from app import breach
+
+    monkeypatch.setattr(breach, "breach_count", lambda pw: 7)
+    body = client.post("/api/assess", json={"password": SECRET, "answers": {}}).json()
+    assert body["features"]["breach_count"] == 7
+    assert "found_in_breach" in body["features"]["patterns"]
+    assert body["score"] == 0
+
+    conn = sqlite3.connect(tmp_path / "test.db")
+    (patterns,) = conn.execute("SELECT patterns FROM assessments").fetchone()
+    conn.close()
+    assert "found_in_breach" in patterns
 
 
 def test_unknown_question_rejected(client):
