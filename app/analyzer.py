@@ -10,11 +10,11 @@ import re
 import string
 from dataclasses import asdict, dataclass, field
 
-from app.questions import QUESTIONS_BY_ID
+from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS_BY_ID
 
 # Bump this whenever the scoring logic changes, so stored records can be
 # compared across versions.
-SCORING_VERSION = "1.1.0"
+SCORING_VERSION = "1.2.0"
 
 # Assumed attacker speed for an offline attack on a fast hash.
 GUESSES_PER_SECOND = 1e10
@@ -83,32 +83,6 @@ class Assessment:
         return asdict(self)
 
 
-# Penalties for patterns detected directly in the password.
-# pattern id -> (penalty, issue message, tip)
-PATTERN_RULES: dict[str, tuple[int, str, str]] = {
-    "common_password": (100, "This is one of the most common passwords.",
-                        "Never use a password from a common-password list."),
-    "contains_common_word": (20, "It contains a very common password as a part.",
-                             "Avoid building on well-known passwords like 'password' or 'qwerty'."),
-    "keyboard_pattern": (15, "It contains a keyboard pattern (e.g. 'qwerty', 'asdf').",
-                         "Avoid keyboard walks. They are in every cracking dictionary."),
-    "sequence": (10, "It contains a sequence like 'abc' or '123'.",
-                 "Avoid alphabetical or numeric sequences."),
-    "repeated_chars": (10, "It contains repeated characters (e.g. 'aaa').",
-                       "Avoid repeating the same character."),
-    "year": (10, "It contains something that looks like a year.",
-             "Avoid years. Attackers try 1900-2099 automatically."),
-    "date": (10, "It contains something that looks like a date.",
-             "Avoid dates such as birthdays or anniversaries."),
-    "letters_only": (10, "It uses letters only.",
-                     "Mix in digits and symbols, or make it much longer."),
-    "digits_only": (20, "It uses digits only.",
-                    "Digit-only passwords are very fast to brute-force."),
-    "too_short": (20, "It is shorter than 8 characters.",
-                  "Use at least 12 characters. Length matters more than complexity."),
-}
-
-
 def _has_sequence(pw: str, run: int = 3) -> bool:
     lowered = pw.lower()
     for i in range(len(lowered) - run + 1):
@@ -152,6 +126,8 @@ def detect_patterns(pw: str) -> list[str]:
         patterns.append("date")
     if pw.isalpha():
         patterns.append("letters_only")
+    if any(c.islower() or c.isupper() for c in pw) and (pw == pw.lower() or pw == pw.upper()):
+        patterns.append("single_case")
     if pw.isdigit():
         patterns.append("digits_only")
     if len(pw) < 8:
@@ -221,10 +197,10 @@ def score_features(features: Features, answers: dict[str, bool]) -> Assessment:
     penalty = 0
 
     for pattern in features.patterns:
-        p, issue, tip = PATTERN_RULES[pattern]
-        penalty += p
-        issues.append(issue)
-        tips.append(tip)
+        check = AUTO_CHECKS_BY_ID[pattern]
+        penalty += check.penalty
+        issues.append(check.issue)
+        tips.append(check.tip)
 
     for qid, answer in answers.items():
         question = QUESTIONS_BY_ID.get(qid)

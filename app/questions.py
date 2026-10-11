@@ -1,8 +1,10 @@
-"""Yes/no questions asked after the user enters a password.
+"""All scoring rules: yes/no questions and automatic checks.
 
-Each question captures context that cannot be detected from the password
-alone (e.g. whether it contains the user's own name). A "yes" answer applies
-the given penalty to the score.
+- QUESTIONS are asked after the user enters a password. They capture context
+  that cannot be detected from the password alone (e.g. whether it contains
+  the user's own name). A "yes" answer applies the given penalty.
+- AUTO_CHECKS are detected from the password itself by app/analyzer.py,
+  so the user is not asked about them.
 """
 
 from dataclasses import dataclass
@@ -14,7 +16,7 @@ class Question:
     text: str
     penalty: int
     tip: str
-    # Pattern ids (see analyzer.PATTERN_RULES) that cover the same weakness.
+    # AutoCheck ids (see AUTO_CHECKS below) that cover the same weakness.
     # If any of them was already detected, this question's penalty is skipped
     # so the weakness is not counted twice.
     overlaps: tuple[str, ...] = ()
@@ -25,69 +27,151 @@ QUESTIONS: list[Question] = [
         id="contains_name",
         text="Does your password contain your name or nickname?",
         penalty=25,
-        tip="Remove your name. It is the first thing an attacker who knows you will try.",
+        tip="Names are one of the first things someone tries when guessing a password.",
     ),
     Question(
         id="contains_birthday",
-        text="Does it contain your date of birth or birth year?",
+        text="Does your password contain your date of birth or birth year?",
         penalty=25,
-        tip="Remove birth dates. They are easy to find on social media.",
+        tip="Birth dates and years are easy to find online and are among the most common guesses.",
     ),
     Question(
         id="contains_location",
-        text="Does it contain the name of your city, town, or street?",
+        text="Does your password contain your city, town or street name?",
         penalty=15,
-        tip="Avoid place names you are connected to. They are easy to guess from your profiles.",
+        tip="Places connected to you can often be found on your social media or public profiles.",
     ),
     Question(
         id="contains_family_or_pet",
-        text="Does it contain the name of a family member, friend, partner, or pet?",
+        text="Does it contain the name of a family member, friend, partner or pet?",
         penalty=20,
-        tip="Avoid names of people and pets close to you.",
+        tip="People close to you are easy to find on social media, which makes their names easy to guess.",
     ),
     Question(
         id="predictable_sequence",
-        text="Does it contain a predictable sequence (e.g. 12345, abcdef, qwerty)?",
+        text="Does it contain a predictable sequence or repeats, like 12345, abcdef, qwerty or aaa?",
         penalty=15,
-        tip="Avoid sequences and keyboard patterns. They are in every cracking dictionary.",
-        overlaps=("sequence", "keyboard_pattern"),
+        tip="Sequences and keyboard patterns are in every attacker's guessing list.",
+        overlaps=("sequence", "keyboard_pattern", "repeated_chars"),
     ),
     Question(
         id="reused",
-        text="Do you use the same password for multiple accounts?",
+        text="Do you use this same password on other websites or accounts?",
         penalty=20,
-        tip="Use a unique password per site. A password manager makes this easy.",
+        tip="If one site is breached, attackers try that same password on your other accounts.",
     ),
     Question(
         id="contains_personal_number",
-        text="Does it contain a phone number, address number, ZIP code, or ID number?",
+        text="Does it contain a phone number, house number, postcode or ID number?",
         penalty=20,
-        tip="Avoid personal numbers. They often appear in leaked databases.",
+        tip="Numbers connected to you are easy to find or guess, so they add very little protection.",
     ),
     Question(
         id="contains_interest",
-        text="Is it based on a favorite team, band, hobby, or brand?",
+        text="Is it based on a favourite team, band, hobby or brand?",
         penalty=10,
-        tip="Interests are guessable from your profiles. Use unrelated random words.",
+        tip="Your interests are often visible online, which makes them easier to guess.",
     ),
     Question(
         id="word_with_substitutions",
-        text="Is it a common word with simple substitutions (e.g. p@ssw0rd)?",
+        text="Is it a normal word with simple swaps, like a changed to @ or o changed to 0?",
         penalty=15,
-        tip="Cracking tools try l33t-speak substitutions automatically.",
+        tip="Attackers know these swaps well, so they don't make a word much harder to guess.",
     ),
     Question(
         id="shared",
-        text="Have you ever shared this password with someone else?",
+        text="Have you shared this password with anyone else?",
         penalty=10,
-        tip="Change passwords you have shared, and avoid sharing them in the future.",
+        tip="Once a password is shared, you can no longer control who else has it.",
     ),
     Question(
         id="breached",
-        text="As far as you know, has this password ever been exposed in a data breach?",
+        text="Has this password ever appeared in a data breach, for example in a breach alert?",
         penalty=30,
-        tip="Change any breached password everywhere you use it. Attackers try leaked passwords first.",
+        tip="A password that has leaked once is in attackers' lists and should never be used again.",
     ),
 ]
 
 QUESTIONS_BY_ID: dict[str, Question] = {q.id: q for q in QUESTIONS}
+
+
+@dataclass(frozen=True)
+class AutoCheck:
+    id: str
+    issue: str
+    penalty: int
+    tip: str
+
+
+# The detection logic for each id lives in analyzer.detect_patterns().
+AUTO_CHECKS: list[AutoCheck] = [
+    AutoCheck(
+        id="common_password",
+        issue="This is one of the most common passwords.",
+        penalty=100,
+        tip="Very common passwords are the first ones attackers try, so change this one straight away.",
+    ),
+    AutoCheck(
+        id="contains_common_word",
+        issue="It is a common password with a few extra characters added.",
+        penalty=20,
+        tip="Adding a number or symbol to a common word barely slows attackers down, "
+            "because they try those variations automatically.",
+    ),
+    AutoCheck(
+        id="too_short",
+        issue="It is shorter than 8 characters.",
+        penalty=20,
+        tip="Short passwords can be guessed far faster. Use at least 12 characters.",
+    ),
+    AutoCheck(
+        id="digits_only",
+        issue="It uses digits only.",
+        penalty=20,
+        tip="Digits alone give attackers very few combinations to try.",
+    ),
+    AutoCheck(
+        id="letters_only",
+        issue="It uses letters only, with no numbers or symbols.",
+        penalty=10,
+        tip="Mixing in numbers and symbols gives attackers more combinations to get through.",
+    ),
+    AutoCheck(
+        id="single_case",
+        issue="Its letters are all lowercase or all uppercase.",
+        penalty=10,
+        tip="Mixing upper and lower case makes a password harder to guess.",
+    ),
+    AutoCheck(
+        id="keyboard_pattern",
+        issue="It contains a keyboard pattern (e.g. 'qwerty', 'asdf').",
+        penalty=15,
+        tip="Avoid keyboard walks. They are in every cracking dictionary.",
+    ),
+    AutoCheck(
+        id="sequence",
+        issue="It contains a sequence like 'abc' or '123'.",
+        penalty=10,
+        tip="Avoid alphabetical or numeric sequences.",
+    ),
+    AutoCheck(
+        id="repeated_chars",
+        issue="It contains repeated characters (e.g. 'aaa').",
+        penalty=10,
+        tip="Avoid repeating the same character.",
+    ),
+    AutoCheck(
+        id="year",
+        issue="It contains something that looks like a year.",
+        penalty=10,
+        tip="Avoid years. Attackers try 1900-2099 automatically.",
+    ),
+    AutoCheck(
+        id="date",
+        issue="It contains something that looks like a date.",
+        penalty=10,
+        tip="Avoid dates such as birthdays or anniversaries.",
+    ),
+]
+
+AUTO_CHECKS_BY_ID: dict[str, AutoCheck] = {c.id: c for c in AUTO_CHECKS}

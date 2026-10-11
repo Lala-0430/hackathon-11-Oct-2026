@@ -74,7 +74,9 @@ All settings are optional and read from the environment or `.env`.
 
 ## Scoring
 
-The scoring logic lives in [`app/analyzer.py`](app/analyzer.py) and [`app/questions.py`](app/questions.py).
+All questions, automatic checks, penalties, and advice are defined in one place:
+[`app/questions.py`](app/questions.py). The detection and scoring code is in
+[`app/analyzer.py`](app/analyzer.py).
 
 1. **Base score from entropy.** Entropy is estimated as `length × log2(character pool size)`,
    where the pool depends on which character types are used (lowercase 26, uppercase 26,
@@ -93,25 +95,30 @@ The scoring logic lives in [`app/analyzer.py`](app/analyzer.py) and [`app/questi
    | Letters only           | 10      | `sunflower`      |
    | Digits only            | 20      | `48291736`       |
    | Shorter than 8         | 20      | `a1!b`           |
+   | All one case           | 10      | `sunflower99`, `HELLO!` |
 
 3. **Question penalties.** Each "yes" answer subtracts points:
 
-   | Question                                                   | Penalty |
-   |------------------------------------------------------------|---------|
-   | Contains your name or nickname                             | 25      |
-   | Contains your date of birth or birth year                  | 25      |
-   | Contains your city, town, or street name                   | 15      |
-   | Contains a family member's, friend's, partner's, or pet's name | 20  |
-   | Contains a predictable sequence (e.g. `12345`, `abcdef`, `qwerty`) | 15* |
-   | Used for multiple accounts                                 | 20      |
-   | Contains a phone number, address number, ZIP, or ID        | 20      |
-   | Based on a favorite team, band, hobby, or brand            | 10      |
-   | Common word with simple substitutions                      | 15      |
-   | Shared with someone else                                   | 10      |
-   | Exposed in a data breach                                   | 30      |
+   | Question                                                          | Penalty |
+   |-------------------------------------------------------------------|---------|
+   | Contains your name or nickname                                    | 25      |
+   | Contains your date of birth or birth year                         | 25      |
+   | Contains your city, town or street name                           | 15      |
+   | Contains the name of a family member, friend, partner or pet      | 20      |
+   | Contains a predictable sequence or repeats (e.g. `12345`, `qwerty`, `aaa`) | 15* |
+   | Used on other websites or accounts                                | 20      |
+   | Contains a phone number, house number, postcode or ID number      | 20      |
+   | Based on a favourite team, band, hobby or brand                   | 10      |
+   | A normal word with simple swaps (e.g. `a` → `@`, `o` → `0`)       | 15      |
+   | Shared with anyone else                                           | 10      |
+   | Appeared in a data breach                                         | 30      |
 
-   \* Skipped if a sequence or keyboard pattern was already detected automatically,
-   so the same weakness is not counted twice (see `overlaps` in `app/questions.py`).
+   \* Skipped if a sequence, keyboard pattern, or repeated characters were already
+   detected automatically, so the same weakness is not counted twice
+   (see `overlaps` in `app/questions.py`).
+
+   Things the app can check from the password itself (common passwords, length,
+   digits/letters only, single case) are detected automatically instead of being asked.
 
 4. **Final score** = base − penalties, clamped to 0–100.
 
@@ -221,7 +228,7 @@ curl -X POST http://127.0.0.1:8000/api/assess \
 ├── app/
 │   ├── main.py          # FastAPI app and API routes
 │   ├── analyzer.py      # Feature extraction, pattern detection, scoring
-│   ├── questions.py     # Yes/no questions and their penalties
+│   ├── questions.py     # All questions, automatic checks, penalties, and advice
 │   ├── db.py            # SQLite storage
 │   └── advisor.py       # Optional Gemma advice
 ├── static/              # Frontend (index.html, app.js, style.css)
@@ -239,8 +246,14 @@ uv run pytest
 The tests cover pattern detection, scoring, the API, and a check that the
 raw password never appears in the database.
 
-## Adding a question
+## Changing questions or penalties
 
-Add a `Question` to `QUESTIONS` in [`app/questions.py`](app/questions.py) with an `id`,
-the question `text`, a `penalty`, and a `tip`. The frontend loads questions from the
-API, so no frontend change is needed. Increase `SCORING_VERSION` afterwards.
+Edit [`app/questions.py`](app/questions.py):
+
+- **Questions** (`QUESTIONS`): each has an `id`, the question `text`, a `penalty`,
+  and a `tip`. The frontend loads questions from the API, so no frontend change is needed.
+- **Automatic checks** (`AUTO_CHECKS`): you can change the `issue` text, `penalty`,
+  and `tip` here. Adding a *new* automatic check also needs detection code in
+  `detect_patterns()` in `app/analyzer.py`.
+
+Increase `SCORING_VERSION` in `app/analyzer.py` afterwards.

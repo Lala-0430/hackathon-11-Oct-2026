@@ -1,3 +1,5 @@
+import re
+
 from app.analyzer import analyze, detect_patterns, format_duration
 
 
@@ -41,9 +43,25 @@ def test_pattern_detection():
     assert "year" in detect_patterns("summer1998")
     assert "digits_only" in detect_patterns("48291736")
     assert "too_short" in detect_patterns("a1!")
+    assert "single_case" in detect_patterns("sunflower99")
+    assert "single_case" not in detect_patterns("Sunflower99")
+    assert "single_case" not in detect_patterns("12345678")
+    assert "single_case" not in detect_patterns("こんにちは12345")
 
 
 def test_format_duration():
     assert format_duration(0.5) == "less than a second"
     assert format_duration(120) == "2 minutes"
     assert format_duration(86400) == "1 day"
+
+
+def test_every_detectable_pattern_has_an_auto_check():
+    import inspect
+
+    from app import analyzer
+    from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS
+
+    detected_ids = set(re.findall(r'patterns\.append\("(\w+)"\)', inspect.getsource(analyzer)))
+    assert detected_ids == set(AUTO_CHECKS_BY_ID)
+    for q in QUESTIONS:
+        assert set(q.overlaps) <= set(AUTO_CHECKS_BY_ID)
