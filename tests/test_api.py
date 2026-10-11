@@ -32,7 +32,7 @@ def test_questions(client):
 def test_assess_stores_features_but_not_password(client, tmp_path):
     res = client.post("/api/assess", json={
         "password": SECRET,
-        "answers": {"contains_name": False, "reused": True},
+        "answers": {"contains_name": False, "reused_or_shared": True},
     })
     assert res.status_code == 200
     body = res.json()

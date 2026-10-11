@@ -27,53 +27,19 @@ class Question:
 QUESTIONS: list[Question] = [
     Question(
         id="contains_name",
-        text="Does your password contain your name or nickname?",
+        text="Does it contain your name, or the name of a family member, friend, partner or pet?",
         penalty=25,
-        tip="Names are one of the first things someone tries when guessing a password.",
-        fix="Remove your name or nickname",
+        tip="Names of you and people close to you are easy to find on social media "
+            "and are among the first things attackers try.",
+        fix="Remove the names",
     ),
     Question(
-        id="contains_birthday",
-        text="Does your password contain your date of birth or birth year?",
+        id="contains_personal_details",
+        text="Does it contain your birthday, phone number, address, postcode or another detail about you?",
         penalty=25,
-        tip="Birth dates and years are easy to find online and are among the most common guesses.",
-        fix="Remove your birth date or year",
-    ),
-    Question(
-        id="contains_location",
-        text="Does your password contain your city, town or street name?",
-        penalty=15,
-        tip="Places connected to you can often be found on your social media or public profiles.",
-        fix="Remove the place name",
-    ),
-    Question(
-        id="contains_family_or_pet",
-        text="Does it contain the name of a family member, friend, partner or pet?",
-        penalty=20,
-        tip="People close to you are easy to find on social media, which makes their names easy to guess.",
-        fix="Remove the name of someone close to you",
-    ),
-    Question(
-        id="predictable_sequence",
-        text="Does it contain a predictable sequence or repeats, like 12345, abcdef, qwerty or aaa?",
-        penalty=15,
-        tip="Sequences and keyboard patterns are in every attacker's guessing list.",
-        fix="Remove the sequence or repeats",
-        overlaps=("sequence", "keyboard_pattern", "repeated_chars"),
-    ),
-    Question(
-        id="reused",
-        text="Do you use this same password on other websites or accounts?",
-        penalty=20,
-        tip="If one site is breached, attackers try that same password on your other accounts.",
-        fix="Use it on this account only",
-    ),
-    Question(
-        id="contains_personal_number",
-        text="Does it contain a phone number, house number, postcode or ID number?",
-        penalty=20,
-        tip="Numbers connected to you are easy to find or guess, so they add very little protection.",
-        fix="Remove the personal number",
+        tip="Birthdays, numbers and places connected to you are easy to find online, "
+            "so they add very little protection.",
+        fix="Remove your personal details",
     ),
     Question(
         id="contains_interest",
@@ -90,11 +56,12 @@ QUESTIONS: list[Question] = [
         fix="Replace the word with random words or characters",
     ),
     Question(
-        id="shared",
-        text="Have you shared this password with anyone else?",
-        penalty=10,
-        tip="Once a password is shared, you can no longer control who else has it.",
-        fix="Stop sharing it and keep it to yourself",
+        id="reused_or_shared",
+        text="Do you use it on other websites, or have you shared it with anyone?",
+        penalty=20,
+        tip="If one site is breached, attackers try the same password elsewhere, "
+            "and once it is shared you no longer control who has it.",
+        fix="Use it on this account only and keep it to yourself",
     ),
     Question(
         id="breached",

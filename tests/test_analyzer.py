@@ -43,17 +43,8 @@ def test_long_random_password_is_very_strong():
 def test_yes_answers_lower_the_score():
     pw = "t7#Vq!x9Lm@2Rz$Kp4&"
     clean = analyze(pw, {"contains_name": False}).score
-    with_name = analyze(pw, {"contains_name": True, "reused": True}).score
+    with_name = analyze(pw, {"contains_name": True, "reused_or_shared": True}).score
     assert with_name == clean - 45
-
-
-def test_sequence_question_not_double_counted():
-    detected = analyze("Zr!abc9Kq#2mWx", {})  # "abc" is detected automatically
-    assert "sequence" in detected.features.patterns
-    assert analyze("Zr!abc9Kq#2mWx", {"predictable_sequence": True}).score == detected.score
-
-    undetected = analyze("t7#Vq!x9Lm@2Rz$Kp4&", {})
-    assert analyze("t7#Vq!x9Lm@2Rz$Kp4&", {"predictable_sequence": True}).score == undetected.score - 15
 
 
 def test_pattern_detection():
@@ -115,17 +106,13 @@ def test_improvements_are_cumulative_steps():
 
 
 def test_improvements_rank_fixes_while_score_is_zero():
-    result = analyze("mike1990", {"contains_name": True, "contains_birthday": True, "reused": True})
+    result = analyze("mike1990", {"contains_name": True, "contains_personal_details": True,
+                                  "reused_or_shared": True})
     assert result.score == 0
     fixes = [i.fix for i in result.improvements]
-    assert "Remove your name or nickname" in fixes
-    assert "Use it on this account only" in fixes
+    assert "Remove the names" in fixes
+    assert "Use it on this account only and keep it to yourself" in fixes
     assert result.improvements[-1].score > 50
-
-
-def test_fixing_auto_pattern_clears_overlapping_question():
-    result = analyze("Zr!abc9Kq#2mWx", {"predictable_sequence": True})
-    assert [(i.fix, i.score) for i in result.improvements] == [("Remove the sequence", 100)]
 
 
 def test_replace_recommended_instead_of_improvements():

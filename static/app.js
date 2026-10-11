@@ -14,8 +14,6 @@ const LABEL_SUMMARIES = {
   "Very Strong": "Excellent! Your password is very hard to crack.",
 };
 
-// Questions shown before "Show more questions" is opened.
-const VISIBLE_QUESTIONS = 3;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 50;
 
 const $ = (id) => document.getElementById(id);
@@ -24,7 +22,6 @@ const views = ["home", "checker", "generator", "about"];
 
 let questions = [];
 let assessmentId = null;
-let adviceCache = null;
 
 /* ---------- Navigation ---------- */
 
@@ -175,10 +172,9 @@ $("password-form").addEventListener("submit", (e) => {
 async function loadQuestions() {
   const res = await fetch("/api/questions");
   questions = await res.json();
-  $("question-list").replaceChildren(...questions.map((q, i) => {
+  $("question-list").replaceChildren(...questions.map((q) => {
     const li = document.createElement("li");
     li.dataset.id = q.id;
-    if (i >= VISIBLE_QUESTIONS) li.classList.add("extra");
     li.innerHTML = `
       <div class="question-text"></div>
       <div class="yes-no">
@@ -189,20 +185,7 @@ async function loadQuestions() {
     li.addEventListener("change", () => li.classList.remove("missing"));
     return li;
   }));
-  $("more-questions").classList.toggle("hidden", questions.length <= VISIBLE_QUESTIONS);
-  setQuestionsExpanded(false);
 }
-
-function setQuestionsExpanded(expanded) {
-  $("question-list").classList.toggle("expanded", expanded);
-  $("more-questions").classList.toggle("open", expanded);
-  $("more-questions").querySelector("span").textContent =
-    expanded ? "Show fewer questions" : `Show more questions (${questions.length - VISIBLE_QUESTIONS})`;
-}
-
-$("more-questions").addEventListener("click", () => {
-  setQuestionsExpanded(!$("question-list").classList.contains("expanded"));
-});
 
 $("back").addEventListener("click", () => showStep("step-password"));
 
@@ -210,14 +193,13 @@ $("questions-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = new FormData(e.target);
 
-  // Validate manually: some questions may be collapsed, so native validation can't focus them.
+  // Validate manually so every unanswered question is highlighted at once.
   const missing = questions.filter((q) => !form.get(q.id));
   document.querySelectorAll("#question-list li").forEach((li) => {
     li.classList.toggle("missing", missing.some((q) => q.id === li.dataset.id));
   });
   $("questions-error").classList.toggle("hidden", missing.length === 0);
   if (missing.length) {
-    if (questions.indexOf(missing[0]) >= VISIBLE_QUESTIONS) setQuestionsExpanded(true);
     document.querySelector("#question-list li.missing").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -254,7 +236,6 @@ function fillList(el, items) {
 
 function renderResult(r) {
   assessmentId = r.id;
-  adviceCache = null;
   const color = LABEL_COLORS[r.label];
   const f = r.features;
 
@@ -283,10 +264,8 @@ function renderResult(r) {
   fillList($("tips"), r.tips);
   renderImprovements(r);
 
-  $("ai-button").disabled = !r.ai_advice_available;
-  $("ai-sub").textContent = r.ai_advice_available
-    ? "Get personalised advice from Gemma"
-    : "AI advice is not configured on this server";
+  $("ai-block").classList.toggle("hidden", !r.ai_advice_available);
+  if (r.ai_advice_available) loadAdvice(r.id);
 
   document.querySelectorAll("[data-feedback]").forEach((b) => {
     b.disabled = false;
@@ -338,44 +317,25 @@ function animateNumber(el, target) {
   requestAnimationFrame(tick);
 }
 
-/* ---------- AI advice modal ---------- */
+/* ---------- AI advice ---------- */
 
-function openModal() {
-  $("ai-modal").classList.remove("hidden");
-  $("ai-ok").focus();
-}
-function closeModal() {
-  $("ai-modal").classList.add("hidden");
-  $("ai-button").focus();
-}
-
-$("ai-button").addEventListener("click", async () => {
+// Fetched as soon as the result is shown; the rest of the result doesn't wait for it.
+async function loadAdvice(id) {
   const box = $("ai-advice");
-  openModal();
-  if (adviceCache) {
-    box.textContent = adviceCache;
-    return;
-  }
   box.classList.add("loading");
   box.textContent = "Gemma is thinking…";
+  let text;
   try {
-    const res = await fetch(`/api/assessments/${assessmentId}/advice`, { method: "POST" });
+    const res = await fetch(`/api/assessments/${id}/advice`, { method: "POST" });
     const data = await res.json();
-    if (res.ok) adviceCache = data.advice;
-    box.textContent = res.ok ? data.advice : `Could not get advice: ${data.detail}`;
+    text = res.ok ? data.advice : `Could not get advice: ${data.detail}`;
   } catch {
-    box.textContent = "Could not reach the server.";
-  } finally {
-    box.classList.remove("loading");
+    text = "Could not reach the server.";
   }
-});
-
-$("ai-ok").addEventListener("click", closeModal);
-$("ai-close").addEventListener("click", closeModal);
-$("ai-modal").addEventListener("click", (e) => { if (e.target === $("ai-modal")) closeModal(); });
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("ai-modal").classList.contains("hidden")) closeModal();
-});
+  if (id !== assessmentId) return; // the user has started a new check
+  box.classList.remove("loading");
+  box.textContent = text;
+}
 
 /* ---------- Feedback & restart ---------- */
 
@@ -397,7 +357,6 @@ function resetChecker() {
   $("questions-form").reset();
   document.querySelectorAll("#question-list li").forEach((li) => li.classList.remove("missing"));
   $("questions-error").classList.add("hidden");
-  setQuestionsExpanded(false);
   setPasswordVisible(false);
   updateLiveTips();
   assessmentId = null;

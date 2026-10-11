@@ -24,11 +24,13 @@ The same promise is shown at the very top of the Home screen and on the password
 ## How it works
 
 1. **Enter a password.** It is kept in the browser until you submit.
-2. **Answer yes/no questions** about personal information and how you use the password.
+2. **Answer six yes/no questions** about personal information and how you use the password.
 3. **Get your result:** a 0–100 score, a label (Very Weak → Very Strong), an estimated
    crack time, the issues found, concrete tips, and step-by-step changes that would raise
    the score (or a prompt to replace the password if attackers already know it).
-4. *(Optional)* **Get AI advice** from Gemma, based on the analysis only (never the password).
+4. **AI advice from Gemma** appears on the result page right away, based on the analysis
+   only (never the password). It loads in the background while the result is shown, and
+   the card is hidden when `GEMINI_API_KEY` is not set.
 5. *(Optional)* **Rate the result** ("Too low" / "Accurate" / "Too high"). This feedback is stored
    with the record and can be used to tune the scoring.
 
@@ -90,7 +92,7 @@ All settings are optional and read from the environment or `.env`.
 
 | Variable         | Default                 | Description                                  |
 |------------------|-------------------------|----------------------------------------------|
-| `GEMINI_API_KEY` | *(unset)*               | Enables the "Get AI advice" button           |
+| `GEMINI_API_KEY` | *(unset)*               | Enables the Gemma AI advice card on the result page |
 | `GEMMA_MODEL`    | `gemma-4-26b-a4b-it`    | Gemma model used for advice                  |
 | `DATABASE_URL`   | *(unset)*               | PostgreSQL connection string. When set, it is used instead of SQLite |
 | `DATABASE_PATH`  | `data/assessments.db`   | SQLite database file (used when `DATABASE_URL` is unset) |
@@ -144,25 +146,20 @@ All questions, automatic checks, penalties, and advice are defined in one place:
 
    | Question                                                          | Penalty |
    |-------------------------------------------------------------------|---------|
-   | Contains your name or nickname                                    | 25      |
-   | Contains your date of birth or birth year                         | 25      |
-   | Contains your city, town or street name                           | 15      |
-   | Contains the name of a family member, friend, partner or pet      | 20      |
-   | Contains a predictable sequence or repeats (e.g. `12345`, `qwerty`, `aaa`) | 15* |
-   | Used on other websites or accounts                                | 20      |
-   | Contains a phone number, house number, postcode or ID number      | 20      |
+   | Contains your name, or the name of a family member, friend, partner or pet | 25 |
+   | Contains your birthday, phone number, address, postcode or another detail about you | 25 |
    | Based on a favourite team, band, hobby or brand                   | 10      |
    | A normal word with simple swaps (e.g. `a` → `@`, `o` → `0`)       | 15      |
-   | Shared with anyone else                                           | 10      |
+   | Used on other websites, or shared with anyone else                | 20      |
    | Appeared in a data breach                                         | 30*     |
 
-   \* Skipped if the same weakness was already detected automatically, so it is not
-   counted twice (see `overlaps` in `app/questions.py`): the sequence question when a
-   sequence, keyboard pattern, or repeated characters were found, and the data breach
-   question when Have I Been Pwned found the password.
+   \* Skipped when Have I Been Pwned already found the password (see `overlaps` in
+   `app/questions.py`), so the same weakness is not counted twice.
 
    Things the app can check from the password itself (common passwords, length,
-   digits/letters only, single case) are detected automatically instead of being asked.
+   digits/letters only, single case, sequences, keyboard patterns, repeats) are detected
+   automatically instead of being asked. Related questions are combined so there are
+   only six to answer.
 
 4. **Final score** = base − penalties, clamped to 0–100.
 
@@ -212,7 +209,7 @@ Increase it whenever the scoring changes, so old and new results can be compared
 | `has_lower`, `has_upper`, `has_digit`, `has_symbol`, `has_other` | Character types used |
 | `pool_size`, `entropy_bits` | Entropy estimate                          |
 | `patterns`        | JSON array of detected pattern IDs                  |
-| `answers`         | JSON object of yes/no answers, e.g. `{"contains_name": true}` |
+| `answers`         | JSON object of yes/no answers, e.g. `{"contains_name": true}`. Records before scoring version 2.0.0 use the older, longer question list |
 | `score`, `label`  | Result                                              |
 | `user_feedback`   | `accurate`, `too_high`, `too_low`, or `NULL`        |
 
@@ -266,14 +263,14 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" https://<your-app>.vercel.app/api/s
 |--------|---------------------------------------|-------------------------------------|
 | GET    | `/api/questions`                      | List the yes/no questions           |
 | POST   | `/api/assess`                         | Analyze a password and store the result |
-| POST   | `/api/assessments/{id}/advice`        | Get AI advice from Gemma (needs `GEMINI_API_KEY`) |
+| POST   | `/api/assessments/{id}/advice`        | Get AI advice from Gemma (needs `GEMINI_API_KEY`). The result page calls it automatically |
 | POST   | `/api/assessments/{id}/feedback`      | Rate the result (once per assessment) |
 | GET    | `/api/stats`                          | Aggregated statistics (needs `Authorization: Bearer <ADMIN_TOKEN>`) |
 
 `{id}` is the random `id` returned by `/api/assess`.
 
 **Rate limits** (per client IP, in memory): 30 assessments/min, 30 feedback/min,
-5 AI advice/min, and 200 AI advice/hour in total across all users.
+10 AI advice/min, and 200 AI advice/hour in total across all users.
 Exceeding a limit returns `429 Too Many Requests`.
 
 Interactive docs: <http://127.0.0.1:8000/docs>.
@@ -283,7 +280,7 @@ Example:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/assess \
   -H "Content-Type: application/json" \
-  -d '{"password": "Taro1998!Kz", "answers": {"contains_name": true, "contains_birthday": true}}'
+  -d '{"password": "Taro1998!Kz", "answers": {"contains_name": true, "contains_personal_details": true}}'
 ```
 
 ```json
@@ -296,8 +293,8 @@ curl -X POST http://127.0.0.1:8000/api/assess \
   "tips": ["Avoid years. Attackers try 1900-2099 automatically.", "..."],
   "features": {"length": 11, "entropy_bits": 72.27, "patterns": ["year"], "breach_count": 0, "...": "..."},
   "improvements": [
-    {"fix": "Remove your name or nickname", "score": 45},
-    {"fix": "Remove your birth date or year", "score": 70},
+    {"fix": "Remove the names", "score": 45},
+    {"fix": "Remove your personal details", "score": 70},
     {"fix": "Make it at least 16 characters long", "score": 90},
     {"fix": "Remove the year", "score": 100}
   ],

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Per-client limits, plus a global cap on AI advice to protect the Gemini API quota.
 assess_limiter = RateLimiter(limit=30, window_seconds=60)
 feedback_limiter = RateLimiter(limit=30, window_seconds=60)
-advice_limiter = RateLimiter(limit=5, window_seconds=60)
+advice_limiter = RateLimiter(limit=10, window_seconds=60)
 advice_global_limiter = RateLimiter(limit=200, window_seconds=3600)
 
 

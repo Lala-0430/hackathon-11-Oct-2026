@@ -167,9 +167,6 @@
             <h2>A few quick questions</h2>
             <p class="muted">These help us spot weaknesses that can't be detected from the password alone.</p>
             <ol id="question-list" class="questions"></ol>
-            <button type="button" id="more-questions" class="link-btn">
-              <svg><use href="#i-chevron"/></svg><span>Show more questions</span>
-            </button>
             <p id="questions-error" class="error hidden">Please answer every question.</p>
             <div class="actions">
               <button type="button" id="back" class="btn btn-ghost"><svg><use href="#i-back"/></svg> Back</button>
@@ -214,6 +211,12 @@
             </div>
           </div>
 
+          <section class="panel ai-card hidden" id="ai-block" aria-live="polite">
+            <h3 class="ai-title"><svg><use href="#i-sparkle"/></svg>Gemma AI advice</h3>
+            <div id="ai-advice"></div>
+            <p class="muted small ai-note"><svg><use href="#i-lock"/></svg>No password is shared with AI. This advice is based only on the analysis results.</p>
+          </section>
+
           <div class="result-grid">
             <div class="panel" id="issues-block">
               <h3 class="title-bad"><svg><use href="#i-alert"/></svg>Issues found</h3>
@@ -223,11 +226,6 @@
               <h3 class="title-good"><svg><use href="#i-shield"/></svg>Tips</h3>
               <ul id="tips" class="icon-list good"></ul>
             </div>
-            <button type="button" class="panel ai-card" id="ai-button">
-              <span class="ai-title"><svg><use href="#i-sparkle"/></svg>Get AI Advice</span>
-              <span class="ai-sub" id="ai-sub">Get personalised advice from Gemma</span>
-              <svg class="ai-arrow"><use href="#i-arrow"/></svg>
-            </button>
           </div>
 
           <div class="panel improve-card hidden" id="improve-block">
@@ -322,36 +320,6 @@
         </div>
       </section>
     </main>
-  </div>
-
-  <!-- AI advice modal -->
-  <div class="modal hidden" id="ai-modal" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
-    <div class="modal-card">
-      <button type="button" class="icon-btn modal-close" id="ai-close" aria-label="Close"><svg><use href="#i-close"/></svg></button>
-      <div class="modal-head">
-        <div class="bot" aria-hidden="true">
-          <svg viewBox="0 0 64 64">
-            <defs><linearGradient id="g-bot" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7aa2ff"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
-            <circle cx="32" cy="34" r="26" fill="url(#g-bot)"/>
-            <rect x="14" y="24" width="36" height="22" rx="11" fill="#0b1238"/>
-            <circle cx="25" cy="35" r="4" fill="#4cc3ff"/><circle cx="39" cy="35" r="4" fill="#4cc3ff"/>
-            <path d="M32 8v6" stroke="#cbd5ff" stroke-width="3" stroke-linecap="round"/><circle cx="32" cy="7" r="3" fill="#4cc3ff"/>
-          </svg>
-        </div>
-        <div>
-          <h2 id="ai-modal-title">Gemma AI Advice</h2>
-          <p class="muted">Here are some personalised recommendations based on your password analysis.</p>
-        </div>
-      </div>
-      <div class="advice-box">
-        <svg class="advice-spark"><use href="#i-sparkle"/></svg>
-        <div id="ai-advice"></div>
-      </div>
-      <div class="modal-foot">
-        <p class="muted small"><svg><use href="#i-lock"/></svg>Remember: no password is shared with AI. This advice is based only on the analysis results.</p>
-        <button type="button" class="btn btn-primary" id="ai-ok"><svg><use href="#i-check"/></svg> Got it</button>
-      </div>
-    </div>
   </div>
 
   <script src="/static/app.js"></script>

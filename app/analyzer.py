@@ -16,7 +16,7 @@ from app.questions import AUTO_CHECKS_BY_ID, QUESTIONS, QUESTIONS_BY_ID
 
 # Bump this whenever the scoring logic changes, so stored records can be
 # compared across versions.
-SCORING_VERSION = "1.5.0"
+SCORING_VERSION = "2.0.0"
 
 # Assumed attacker speed for an offline attack on a fast hash.
 GUESSES_PER_SECOND = 1e10
